@@ -1,0 +1,352 @@
+LAMMPS (29 Oct 2020)
+OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (src/comm.cpp:94)
+  using 1 OpenMP thread(s) per MPI task
+
+dimension          2
+units              lj
+atom_style         rheo
+boundary           s s p
+comm_modify        vel yes
+newton off
+
+##### Particle Generation #######
+##################################
+
+## Particle Lattice/Resolution Parameters
+variable           L equal 10
+#variable           ttot equal 500
+variable           sf equal 0.1 #25 #/${L} #scaling of unit cell #scale factor for particle resolution
+# n is particle number density, depends on lattive
+variable           nb equal 1    #number of basis atoms depends on lattice
+variable           n equal ${nb}/(${sf}^2) # number of particles per volume
+variable           n equal 1/(${sf}^2) 
+variable           n equal 1/(0.1^2) 
+variable           del equal ${sf}#*sqrt(2) # distance between particles
+variable           del equal 0.1
+lattice            sq ${n} #create a set of potential particle locations
+lattice            sq 100 
+Lattice spacing in x,y,z = 0.1 0.1 0.1
+# SPH Smoothing Kernel Length
+variable           hd equal 3.5
+variable           h3 equal ${hd}*${del}
+variable           h3 equal 3.5*${del}
+variable           h3 equal 3.5*0.1
+
+
+# create simulation box
+variable           dz equal 0.1*${sf} #For 2D, make sure that z-dimension only has 1 particle layer
+variable           dz equal 0.1*0.1 
+region             box block -${L} ${L} -${L} ${L} -${dz} ${dz} units box #create a 2D box using box units (vs lattice units)
+region             box block -10 ${L} -${L} ${L} -${dz} ${dz} units box 
+region             box block -10 10 -${L} ${L} -${dz} ${dz} units box 
+region             box block -10 10 -10 ${L} -${dz} ${dz} units box 
+region             box block -10 10 -10 10 -${dz} ${dz} units box 
+region             box block -10 10 -10 10 -0.01 ${dz} units box 
+region             box block -10 10 -10 10 -0.01 0.01 units box 
+create_box         1 box #create a simulation box from the region box - with 2 types of atoms
+Created orthogonal box = (-10.000000 -10.000000 -0.01) to (10.000000 10.000000 0.01)
+  2 by 1 by 1 MPI processor grid
+#Create 2D droplet
+region             cyl  cylinder z 0.0 0.0 5 -${dz} ${dz} units box
+region             cyl  cylinder z 0.0 0.0 5 -0.01 ${dz} units box
+region             cyl  cylinder z 0.0 0.0 5 -0.01 0.01 units box
+create_atoms       1 region cyl #creates atoms of type 1 within the box region
+Created 7837 atoms
+  create_atoms CPU = 0.001 seconds
+
+
+
+# Assign all particles of type 1 to a group fluid
+group              fluid type 1
+7837 atoms in group fluid
+#group             wall type 2
+
+##### End Particle Generation #######
+##################################
+
+#Now randomly displace in x and y up %20 of their spacing (sf)
+variable           seed equal 135414
+variable           dr equal 0.05*${del}
+variable           dr equal 0.05*0.1
+displace_atoms     fluid random ${dr} ${dr} 0 ${seed} units box
+displace_atoms     fluid random 0.005 ${dr} 0 ${seed} units box
+displace_atoms     fluid random 0.005 0.005 0 ${seed} units box
+displace_atoms     fluid random 0.005 0.005 0 135414 units box
+Displacing atoms ...
+
+##### Setting Physical Parameters #######
+##################################
+
+# Potential parameters eta = 1, cs = 0 so force gives laplacian
+variable           rho0 equal 1.0 #Equilibrium density P=cs^2(rho-rho0)
+variable           mp equal ${rho0}/${n} #particle mass, fixed by density and number density
+variable           mp equal 1/${n} 
+variable           mp equal 1/100 
+variable           cs equal 4.0 #speed of sound - for pressure EoS
+variable           eta equal 0.01 #dynamic viscosity
+variable           zeta equal 1 #artificial viscosity - stabilizing term
+variable           Dr equal 0.05*${h3}*${cs} #density diffusion - stabilizing term to diffuse noise throughout the system
+variable           Dr equal 0.05*0.35*${cs} 
+variable           Dr equal 0.05*0.35*4 
+#variable          D equal 1.0
+#variable          kappa equal ${D}*${rho0}/${mp}
+#variable          fext equal 5e-3/${n}
+
+
+# Set particle properties
+mass               * ${mp}
+mass               * 0.01
+set                group all phase 0
+Setting atom values ...
+  7837 settings made for phase
+set                group all temp 1.0
+Setting atom values ...
+  7837 settings made for temp
+
+variable           sigma0 equal 0.1
+variable           ux atom  ${sigma0}*x
+variable           ux atom  0.1*x
+variable           uy atom -${sigma0}*y
+variable           uy atom -0.1*y
+
+velocity           all set v_ux v_uy 0.0 units box
+
+#variable    omega equal 0.05/${n}
+#variable    fsx atom -${omega}*x
+#variable    fsy atom -${omega}*y
+#fix         4 all addforce v_fsx v_fsy 0.0
+
+variable           d0 atom 1 #1.0-0.5*(${omega}/${cs}/${cs})*(x*x+y*y)
+set                group all rho v_d0
+Setting atom values ...
+  7837 settings made for rho
+
+
+##### Define Physical Equations #######
+##################################
+
+fix                1 all rheo ${h3} CRK2 22 shift # rhosum 1  shift
+fix                1 all rheo 0.35 CRK2 22 shift 
+fix                2 all rheo/surface ${h3}
+fix                2 all rheo/surface 0.35
+fix                3 all rheo/viscosity constant ${eta}
+fix                3 all rheo/viscosity constant 0.01
+
+pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr}
+pair_style         rheo 0.35 artificial/visc ${zeta} rho/damp ${Dr}  
+pair_style         rheo 0.35 artificial/visc 1 rho/damp ${Dr}  
+pair_style         rheo 0.35 artificial/visc 1 rho/damp 0.07  
+pair_coeff         * * ${rho0} ${cs}
+pair_coeff         * * 1 ${cs}
+pair_coeff         * * 1 4
+
+#Timestep
+#Ensures that the timestep is smaller than values, as per CFL criteria
+variable           dt_max equal  0.1*${h3}/${cs}/3
+variable           dt_max equal  0.1*0.35/${cs}/3
+variable           dt_max equal  0.1*0.35/4/3
+#variable           dx_max equal ${h3}/100
+timestep           ${dt_max}
+timestep           0.00291666666666667
+
+#variable           Nsteps equal ${ttot}/dt
+
+##### Defining Output Setting #######
+##################################
+
+#Compute atom properties to output in dump file
+compute            den all property/atom rho
+compute            phase all property/atom phase
+compute            eta all property/atom viscosity
+
+#l log file output and output frequency
+thermo             200
+thermo_style       custom step time ke temp press
+thermo_modify      norm no #report properties as extensive, not intensive (i.e. per mol)
+
+#define a dump file
+dump               1 all custom 200 1_1_10.atoms id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
+dump               2 all netcdf 200 1_1_10.nc id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
+#dump_modify        1 append yes at -1 thermo yes
+
+#modify neighbor bin size based on the cutoff distance h3
+variable           skin equal 0.2*${h3}
+variable           skin equal 0.2*0.35
+neighbor           ${skin} bin
+neighbor           0.07 bin
+neigh_modify       one 10000 #increase number of allowed neighbors
+
+#run for n steps
+run 20000 #upto
+WARNING: One or more atoms are time integrated more than once (src/modify.cpp:285)
+Neighbor list info ...
+  update every 1 steps, delay 10 steps, check yes
+  max neighbors/atom: 10000, page size: 100000
+  master list distance cutoff = 0.42
+  ghost atom cutoff = 0.42
+  binsize = 0.21, bins = 48 48 1
+  6 neighbor lists, perpetual/occasional/extra = 6 0 0
+  (1) pair rheo, perpetual, half/full from (2)
+      attributes: half, newton off
+      pair build: halffull/newtoff
+      stencil: none
+      bin: none
+  (2) compute rheo/kernel, perpetual
+      attributes: full, newton off
+      pair build: full/bin/atomonly
+      stencil: full/bin/2d
+      bin: standard
+  (3) compute rheo/grad, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+  (4) compute rheo/chi, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+  (5) fix rheo/vshift, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+  (6) fix rheo/surface, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+Per MPI rank memory allocation (min/avg/max) = 14.42 | 14.42 | 14.42 Mbytes
+Step Time KinEng Temp Press 
+       0            0    4.8875307 0.00062372776  0.049027796 
+     200   0.58333333    4.8661317 0.0006209969  0.078927551 
+     400    1.1666667    4.8211545 0.00061525709   0.12678755 
+     600         1.75    4.7909756 0.00061140577   0.13969383 
+     800    2.3333333    4.8093526 0.00061375097  0.096300342 
+    1000    2.9166667    4.8045979 0.0006131442  0.038700652 
+    1200          3.5    4.7894029 0.00061120507   0.03714111 
+    1400    4.0833333    4.7651139 0.0006081054  0.091645904 
+    1600    4.6666667    4.7348528 0.00060424359   0.12243989 
+    1800         5.25    4.7545137 0.00060675264  0.078684403 
+    2000    5.8333333    4.7435829 0.00060535769  0.015537933 
+    2200    6.4166667    4.7335466 0.0006040769  0.030894257 
+    2400            7    4.7101163 0.00060108682  0.098191995 
+    2600    7.5833333    4.7068208 0.00060066626  0.098918883 
+    2800    8.1666667    4.7116052 0.00060127682   0.02010979 
+    3000         8.75    4.6953202 0.0005991986  0.010485975 
+    3200    9.3333333    4.6812084 0.0005973977   0.09316252 
+    3400    9.9166667    4.6796729 0.00059720174  0.089071642 
+    3600         10.5    4.6713446 0.00059613892 0.0016854405 
+    3800    11.083333    4.6706121 0.00059604545  0.032609304 
+    4000    11.666667    4.6406465 0.00059222136   0.10695993 
+    4200        12.25    4.6644649 0.00059526097  0.034085889 
+    4400    12.833333    4.6379775 0.00059188074 2.586242e-05 
+    4600    13.416667    4.6290438 0.00059074065  0.096633272 
+    4800           14     4.645797 0.00059287864  0.056641761 
+    5000    14.583333    4.6148495 0.00058892924 -0.0065080958 
+    5200    15.166667    4.6139275 0.00058881158  0.094199443 
+    5400        15.75    4.6309934 0.00059098946  0.053060909 
+    5600    16.333333    4.6025255 0.0005873565 -0.0034619357 
+    5800    16.916667     4.589203 0.00058565633   0.10614348 
+    6000         17.5    4.6119583 0.00058856028  0.019878124 
+    6200    18.083333    4.6063233 0.00058784116  0.026444435 
+    6400    18.666667    4.5812443 0.00058464067  0.099695407 
+    6600        19.25    4.5707675 0.00058330366 -0.016191154 
+    6800    19.833333    4.5793668 0.00058440107  0.091520506 
+    7000    20.416667    4.5956893 0.00058648408  0.028780415 
+    7200           21    4.5878304 0.00058548117  0.030506432 
+    7400    21.583333    4.5714605 0.0005833921  0.086597816 
+    7600    22.166667    4.5528321 0.00058101481 -0.011010621 
+    7800        22.75    4.5424065 0.00057968434    0.1074673 
+    8000    23.333333    4.5447047 0.00057997763 -0.013261344 
+    8200    23.916667     4.547833 0.00058037685  0.097773336 
+    8400         24.5    4.5561499 0.00058143822 0.0017658617 
+    8600    25.083333    4.5581829 0.00058169766   0.07980703 
+    8800    25.666667    4.5620753 0.0005821944  0.017694814 
+    9000        26.25    4.5597836 0.00058190194  0.066759687 
+    9200    26.833333    4.5600267 0.00058193297  0.025438973 
+    9400    27.416667    4.5555753 0.00058136489  0.063941315 
+    9600           28    4.5533096 0.00058107576  0.022655094 
+    9800    28.583333    4.5462727 0.00058017774  0.071497412 
+   10000    29.166667     4.539394 0.00057929989  0.011368018 
+   10200        29.75    4.5272216 0.0005777465  0.085363507 
+   10400    30.333333    4.5149474 0.00057618012 -0.0035342399 
+   10600    30.916667    4.5012095 0.00057442694  0.098313078 
+   10800         31.5    4.4951099 0.00057364853 -0.010919914 
+   11000    32.083333    4.4986032 0.00057409434  0.095171686 
+   11200    32.666667    4.5128562 0.00057591324 0.0063647182 
+   11400        33.25    4.5316457 0.00057831109  0.060266762 
+   11600    33.833333    4.5336501 0.00057856688  0.052864268 
+   11800    34.416667    4.5152526 0.00057621907 0.0092975925 
+   12000           35    4.4866246 0.00057256567  0.093434021 
+   12200    35.583333    4.4796779 0.00057167916 -0.0043756729 
+   12400    36.166667    4.5045229 0.00057484978  0.072927356 
+   12600        36.75    4.5243253 0.00057737689  0.044705957 
+   12800    37.333333    4.5047399 0.00057487747  0.011455421 
+   13000    37.916667    4.4704316 0.00057049918   0.08776449 
+   13200         38.5    4.4817504 0.00057194365 0.0090738999 
+   13400    39.083333    4.5174292 0.00057649683  0.046414638 
+   13600    39.666667    4.4973842 0.00057393877  0.068768364 
+   13800        40.25    4.4600691 0.00056917676 0.0030072716 
+   14000    40.833333    4.4901533 0.00057301599   0.06660258 
+   14200    41.416667    4.5104558 0.00057560691  0.047440003 
+   14400           42    4.4636091 0.00056962853 0.0068226231 
+   14600    42.583333    4.4678326 0.0005701675   0.07446461 
+   14800    43.166667    4.5074779 0.0005752269   0.03718777 
+   15000        43.75    4.4675841 0.0005701358  0.008657324 
+   15200    44.333333    4.4559897 0.00056865616  0.073029275 
+   15400    44.916667    4.5012373 0.00057443048  0.035282227 
+   15600         45.5    4.4671227 0.00057007692  0.011576543 
+   15800    46.083333    4.4491377 0.00056778174   0.06538017 
+   16000    46.666667    4.4959968 0.00057376171  0.031179763 
+   16200        47.25    4.4649918 0.00056980498  0.015955772 
+   16400    47.833333    4.4434917 0.00056706121  0.063379269 
+   16600    48.416667    4.4905311 0.0005730642  0.026122904 
+   16800           49    4.4648295 0.00056978426  0.013973006 
+   17000    49.583333    4.4370457 0.0005662386  0.058944749 
+   17200    50.166667    4.4816974 0.00057193688  0.024723997 
+   17400        50.75    4.4705147 0.00057050979  0.019940799 
+   17600    51.333333    4.4309596 0.00056546192  0.054518234 
+   17800    51.916667     4.465299 0.00056984417   0.01562831 
+   18000         52.5    4.4805531 0.00057179085  0.022128278 
+   18200    53.083333    4.4361029 0.00056611829  0.047225038 
+   18400    53.666667    4.4389314 0.00056647924  0.010109295 
+   18600        54.25    4.4792011 0.00057161832  0.032846094 
+   18800    54.833333     4.462237 0.00056945342  0.039155425 
+   19000    55.416667     4.424438 0.00056462966 0.0092450034 
+   19200           56    4.4437385 0.00056709271  0.041532143 
+   19400    56.583333    4.4757956 0.00057118372  0.023322082 
+   19600    57.166667     4.456269 0.00056869181  0.015209685 
+   19800        57.75    4.4220005 0.0005643186  0.040685146 
+   20000    58.333333    4.4305249 0.00056540644 0.0091096167 
+Loop time of 673.081 on 2 procs for 20000 steps with 7837 atoms
+
+Performance: 7487.954 tau/day, 29.714 timesteps/s
+99.7% CPU use with 2 MPI tasks x 1 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 124.54     | 125.24     | 125.94     |   6.2 | 18.61
+Neigh   | 2.1753     | 2.1883     | 2.2013     |   0.9 |  0.33
+Comm    | 5.5228     | 5.6503     | 5.7777     |   5.4 |  0.84
+Output  | 1.5257     | 1.5298     | 1.5339     |   0.3 |  0.23
+Modify  | 531.29     | 531.74     | 532.2      |   2.0 | 79.00
+Other   |            | 6.73       |            |       |  1.00
+
+Nlocal:        3918.50 ave        3945 max        3892 min
+Histogram: 1 0 0 0 0 0 0 0 0 1
+Nghost:        86.0000 ave          87 max          85 min
+Histogram: 1 0 0 0 0 0 0 0 0 1
+Neighs:        78955.5 ave       79455 max       78456 min
+Histogram: 1 0 0 0 0 0 0 0 0 1
+FullNghs:     157082.0 ave      158081 max      156083 min
+Histogram: 1 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 314164
+Ave neighs/atom = 40.087278
+Neighbor list builds = 1019
+Dangerous builds = 0
+#write_data  data.*
+#write_restart restart.*
+Total wall time: 0:11:13
