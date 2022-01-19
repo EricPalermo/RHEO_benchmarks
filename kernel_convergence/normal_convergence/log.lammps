@@ -1,0 +1,42 @@
+LAMMPS (29 Oct 2020)
+  using 8 OpenMP thread(s) per MPI task
+dimension          2
+units              lj
+atom_style         rheo
+boundary           p p p
+comm_modify        vel yes
+newton off
+
+##### Particle Generation #######
+##################################
+
+## Particle Lattice/Resolution Parameters
+variable           L equal 10
+variable           sf equal 0.1 #25 #/${L} #scaling of unit cell #scale factor for particle resolution
+# n is particle number density, depends on lattive
+variable           nb equal 1    #number of basis atoms depends on lattice
+variable           n equal ${nb}/(${sf}^2) # number of particles per volume
+variable           n equal 1/(${sf}^2) 
+variable           n equal 1/(0.1^2) 
+variable           del equal ${sf}#*sqrt(2) # distance between particles
+variable           del equal 0.1
+lattice            sq ${n} #create a set of potential particle locations
+lattice            sq 100 
+Lattice spacing in x,y,z = 0.1 0.1 0.1
+# SPH Smoothing Kernel Length
+variable           hd equal 3.5
+variable           h3 equal ${hd}*${del}
+variable           h3 equal 3.5*${del}
+variable           h3 equal 3.5*0.1
+
+
+# create simulation box
+
+read_data         surface.data
+Reading data file ...
+  orthogonal box = (0.0000000 -0.5 -0.01) to (10.999874 0.5 0.01)
+  4 by 1 by 1 MPI processor grid
+  reading atoms ...
+  100 atoms
+ERROR: Unknown identifier in data file: 101 1 0.0 10.0 0 0 0 0 0 0 0 (src/read_data.cpp:715)
+Last command: read_data         surface.data

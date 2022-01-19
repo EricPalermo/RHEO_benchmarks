@@ -80,7 +80,7 @@ set                group all rho v_d0
 ################################## 
 
 fix                1 all rheo ${h3} Quintic 0 #shift # rhosum 1  shift
-fix                2 all rheo/surface ${h3}                
+fix                2 all rheo/surface ${h3} 1.5 10              
 fix                3 all rheo/viscosity constant ${eta} 
 
 pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr} 
@@ -112,7 +112,7 @@ thermo_style       custom step time ke temp press
 thermo_modify      norm no #report properties as extensive, not intensive (i.e. per mol)
 
 #define a dump file
-#dump               1 all custom 200 0_0_5.atoms id type x y z vx vy vz fx fy fz c_den c_phase f_rheo_chi_chi c_eta
+dump               1 all custom 200 0_0_5.atoms id type x y z vx vy vz fx fy fz c_den c_phase f_rheo_chi_chi c_eta
 dump               2 all netcdf 200 0_0_10.nc id type x y z vx vy vz fx fy fz c_den c_phase f_rheo_chi_chi c_eta
 #dump_modify        1 append yes at -1 thermo yes
 
