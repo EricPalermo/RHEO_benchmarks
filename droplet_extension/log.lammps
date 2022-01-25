@@ -47,7 +47,7 @@ region             box block -5 5 -5 5 -0.02 ${dz} units box
 region             box block -5 5 -5 5 -0.02 0.02 units box
 create_box         2 box #create a simulation box from the region box - with 2 types of atoms
 Created orthogonal box = (-5.0000000 -5.0000000 -0.02) to (5.0000000 5.0000000 0.02)
-  2 by 1 by 1 MPI processor grid
+  2 by 2 by 1 MPI processor grid
 #Create atoms in our whole simulation box
 region             cyl cylinder z 0 0 ${R} -${dz} ${dz} units box
 region             cyl cylinder z 0 0 5 -${dz} ${dz} units box
@@ -55,7 +55,7 @@ region             cyl cylinder z 0 0 5 -0.02 ${dz} units box
 region             cyl cylinder z 0 0 5 -0.02 0.02 units box
 create_atoms       1 region cyl #creates atoms of type 1 within the box region
 Created 1953 atoms
-  create_atoms CPU = 0.005 seconds
+  create_atoms CPU = 0.000 seconds
 
 
 
@@ -88,9 +88,9 @@ variable           mp equal 1/25
 variable           cs equal 4.0 #speed of sound - for pressure EoS
 variable           eta equal 0.0 #dynamic viscosity
 variable           zeta equal 1 #artificial viscosity - stabilizing term
-variable           Dr equal 0.05*${h3}*${cs} #density diffusion - stabilizing term to diffuse noise throughout the system
-variable           Dr equal 0.05*0.7*${cs} 
-variable           Dr equal 0.05*0.7*4 
+variable           Dr equal 0.1*${h3}*${cs} #density diffusion - stabilizing term to diffuse noise throughout the system
+variable           Dr equal 0.1*0.7*${cs} 
+variable           Dr equal 0.1*0.7*4 
 #variable          D equal 1.0
 #variable          kappa equal ${D}*${rho0}/${mp}
 #variable          fext equal 5e-3/${n}
@@ -105,8 +105,6 @@ Setting atom values ...
 set                group all temp 1.0
 Setting atom values ...
   1953 settings made for temp
-
-variable           u0 equal 0.1
 
 variable           sigma0 equal 0.1
 variable           ux atom  ${sigma0}*x
@@ -127,8 +125,8 @@ Setting atom values ...
 ##### Define Physical Equations #######
 ##################################
 
-fix                1 all rheo ${h3} CRK1 0 shift # rhosum 1  shift
-fix                1 all rheo 0.7 CRK1 0 shift 
+fix                1 all rheo ${h3} CRK1 23 shift # rhosum 1  shift
+fix                1 all rheo 0.7 CRK1 23 shift 
 fix                2 all rheo/surface ${h3} 1.5 10
 fix                2 all rheo/surface 0.7 1.5 10
 fix                3 all rheo/viscosity constant ${eta}
@@ -137,7 +135,7 @@ fix                3 all rheo/viscosity constant 0
 pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr}
 pair_style         rheo 0.7 artificial/visc ${zeta} rho/damp ${Dr}  
 pair_style         rheo 0.7 artificial/visc 1 rho/damp ${Dr}  
-pair_style         rheo 0.7 artificial/visc 1 rho/damp 0.14  
+pair_style         rheo 0.7 artificial/visc 1 rho/damp 0.28  
 pair_coeff         * * ${rho0} ${cs}
 pair_coeff         * * 1 ${cs}
 pair_coeff         * * 1 4
@@ -170,8 +168,8 @@ thermo_style       custom step time ke temp press
 thermo_modify      norm no #report properties as extensive, not intensive (i.e. per mol)
 
 #define a dump file
-dump               1 all custom 200 0_2_2.atoms id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
-dump               2 all netcdf 200 0_2_2.nc id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
+dump               1 all custom 200 1_1_5.atoms id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta c_phase
+dump               2 all netcdf 200 1_1_5.nc id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
 
 #modify neighbor bin size based on the cutoff distance h3
 variable           skin equal 0.2*${h3}
@@ -221,8 +219,53 @@ Neighbor list info ...
       pair build: copy
       stencil: none
       bin: none
-Per MPI rank memory allocation (min/avg/max) = 30.44 | 30.44 | 30.44 Mbytes
+Per MPI rank memory allocation (min/avg/max) = 30.06 | 30.07 | 30.07 Mbytes
 Step Time KinEng Temp Press 
-       0            0    4.8572599 0.0024883504  0.048680081 
-     200    1.1666667     5.075724 0.0026002685   0.19375497 
-ERROR on proc 0: Non-numeric atom coords - simulation unstable (src/domain.cpp:548)
+       0            0    4.8572599 0.0024883504  0.049380751 
+     200    1.1666667    4.8267308 0.0024727105   0.12573672 
+     400    2.3333333    4.8316876 0.0024752498  0.097748033 
+     600          3.5    4.8226426 0.0024706161  0.038659988 
+     800    4.6666667    4.7694704 0.0024433762   0.12447501 
+    1000    5.8333333    4.7735318 0.0024454569   0.01684244 
+    1200            7    4.7367742 0.0024266261   0.10055654 
+    1400    8.1666667    4.7278022 0.0024220298  0.020229205 
+    1600    9.3333333    4.6912697 0.0024033144  0.096597732 
+    1800         10.5    4.6728058 0.0023938554 0.00035789925 
+    2000    11.666667    4.6357763 0.0023748854    0.1116037 
+    2200    12.833333    4.6247017 0.0023692119 -0.00094052401 
+    2400           14    4.6261778 0.0023699681  0.060617404 
+    2600    15.166667    4.5886091 0.0023507219    0.0958861 
+    2800    16.333333    4.5644857 0.0023383636 -0.010022612 
+    3000         17.5    4.5734083 0.0023429346  0.025822848 
+    3200    18.666667    4.5250223 0.0023181466   0.11009793 
+    3400    19.833333    4.5315716 0.0023215018  0.084622188 
+    3429      20.0025    4.5041844 0.0023074715   0.11248887 
+Loop time of 11.856 on 32 procs for 3429 steps with 1953 atoms
+
+Performance: 145766.867 tau/day, 289.220 timesteps/s
+99.7% CPU use with 4 MPI tasks x 8 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 1.8076     | 1.8496     | 1.8882     |   2.3 | 15.60
+Neigh   | 0.04769    | 0.049601   | 0.051707   |   0.7 |  0.42
+Comm    | 0.14005    | 0.16315    | 0.17893    |   4.0 |  1.38
+Output  | 0.033822   | 0.035208   | 0.036015   |   0.4 |  0.30
+Modify  | 9.6211     | 9.6286     | 9.6412     |   0.3 | 81.21
+Other   |            | 0.1298     |            |       |  1.09
+
+Nlocal:        488.250 ave         494 max         482 min
+Histogram: 2 0 0 0 0 0 0 0 0 2
+Nghost:        386.750 ave         391 max         384 min
+Histogram: 2 0 0 0 0 1 0 0 0 1
+Neighs:        12710.0 ave       12894 max       12501 min
+Histogram: 1 1 0 0 0 0 0 0 0 2
+FullNghs:      21367.0 ave       21715 max       20978 min
+Histogram: 1 1 0 0 0 0 0 0 0 2
+
+Total # of neighbors = 85468
+Ave neighs/atom = 43.762417
+Neighbor list builds = 182
+Dangerous builds = 0
+Total wall time: 0:00:11

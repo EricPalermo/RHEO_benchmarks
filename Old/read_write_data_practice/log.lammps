@@ -1,0 +1,39 @@
+LAMMPS (29 Oct 2020)
+  using 8 OpenMP thread(s) per MPI task
+dimension          2
+units              lj
+atom_style         rheo
+boundary           p p p
+comm_modify        vel yes
+newton off
+
+##### Particle Generation #######
+##################################
+
+## Particle Lattice/Resolution Parameters
+variable           L equal 10
+variable           sf equal 0.5 #25 #/${L} #scaling of unit cell #scale factor for particle resolution
+# n is particle number density, depends on lattive
+variable           nb equal 1    #number of basis atoms depends on lattice
+variable           n equal ${nb}/(${sf}^2) # number of particles per volume
+variable           n equal 1/(${sf}^2) 
+variable           n equal 1/(0.5^2) 
+variable           del equal ${sf}#*sqrt(2) # distance between particles
+variable           del equal 0.5
+lattice            sq ${n} #create a set of potential particle locations
+lattice            sq 4 
+Lattice spacing in x,y,z = 0.5 0.5 0.5
+# SPH Smoothing Kernel Length
+variable           hd equal 3.5
+variable           h3 equal ${hd}*${del}
+variable           h3 equal 3.5*${del}
+variable           h3 equal 3.5*0.5
+
+
+# create simulation box
+
+##### UNCOMMENT FOR RESTART #####
+read_data         restart.10000
+Reading data file ...
+ERROR: Unknown identifier in data file: _SURFACE (src/read_data.cpp:1175)
+Last command: read_data         restart.10000
