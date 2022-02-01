@@ -53,7 +53,7 @@ mass               1 ${mp}
 mass               2 ${mp}
 set                group all rho ${rho0}
 set                group all phase 0
-set                group rig phase 2
+set                group rig phase 4
 set                group all temp 1.0
 
 #velocity           fluid set 0.0 -1 0.0 units box
@@ -84,12 +84,14 @@ compute            den all property/atom rho
 compute            phase all property/atom phase
 compute            eta all property/atom viscosity
 
-thermo             200
+thermo             500
 thermo_style       custom step time etotal temp press
 
 thermo_modify      norm no
-dump               1 all custom 2000 dump.atoms id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
+dump               1 all custom 500 channel_constant_eta.atoms id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
+dump               2 all netcdf 500 channel_constant_eta.nc id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
+
 variable           skin equal 0.2*${h3}
 neighbor           ${skin} bin
 neigh_modify       one 10000
-run 100000
+run 50000

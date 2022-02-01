@@ -2,77 +2,65 @@ LAMMPS (29 Oct 2020)
   using 8 OpenMP thread(s) per MPI task
 dimension          2
 units              lj
-boundary           p p p
 atom_style         rheo
+boundary           p p p
 comm_modify        vel yes
 newton off
 
-##### Particle Generation #######
-##################################
-
-#System dimensions
-variable           width equal 10 #Channel width (y direction)
-variable           length equal 2*${width} #Channel width (x direction)
-variable           length equal 2*10 
-
 ## Particle Lattice/Resolution Parameters
-variable           sf equal 0.25 #25 #/${L} #scaling of unit cell #scale factor for particle resolution
+variable           L equal 10
+variable           sf equal .25 #/${L} #scaling of unit cell
 variable           nb equal 1    #number of basis atoms depends on lattice
-variable           n equal ${nb}/(${sf}^2) # number of particles per volume
-variable           n equal 1/(${sf}^2) 
-variable           n equal 1/(0.25^2) 
-variable           del equal ${sf}#*sqrt(2) # distance between particles
+variable           n equal ${nb}/(${sf}^2)
+variable           n equal 1/(${sf}^2)
+variable           n equal 1/(0.25^2)
+variable           del equal ${sf}#*sqrt(2)
 variable           del equal 0.25
-variable           dz equal 0.1*${sf} #For 2D, make sure that z-dimension only has 1 particle layer
-variable           dz equal 0.1*0.25 
-lattice            sq ${n} #create a set of potential particle locations
-lattice            sq 16 
+variable           hd equal 4.5
+variable           h3 equal ${hd}*${del}
+variable           h3 equal 4.5*${del}
+variable           h3 equal 4.5*0.25
+variable           dz equal 0.1*${sf}
+variable           dz equal 0.1*0.25
+
+# create simulation box
+region             box block 0 20 -10 10 -${dz} ${dz} units box
+region             box block 0 20 -10 10 -0.025 ${dz} units box
+region             box block 0 20 -10 10 -0.025 0.025 units box
+create_box         2 box
+Created orthogonal box = (0.0000000 -10.000000 -0.025) to (20.000000 10.000000 0.025)
+  4 by 2 by 1 MPI processor grid
+lattice            sq ${n}
+lattice            sq 16
 Lattice spacing in x,y,z = 0.25 0.25 0.25
 
-# SPH Smoothing Kernel Length
-variable           hd equal 3.5
-variable           h3 equal ${hd}*${del}
-variable           h3 equal 3.5*${del}
-variable           h3 equal 3.5*0.25
+#region             block cylinder z 10 -4.8 4 -${dz} ${dz} units b
+region             topwall block INF INF  9 10 -${dz} ${dz} units box
+region             topwall block INF INF  9 10 -0.025 ${dz} units box
+region             topwall block INF INF  9 10 -0.025 0.025 units box
+region             block   block INF INF -8.99 8.99 -${dz} ${dz} units box
+region             block   block INF INF -8.99 8.99 -0.025 ${dz} units box
+region             block   block INF INF -8.99 8.99 -0.025 0.025 units box
+region             botwall block INF INF -10 -9 -${dz} ${dz} units box
+region             botwall block INF INF -10 -9 -0.025 ${dz} units box
+region             botwall block INF INF -10 -9 -0.025 0.025 units box
 
-#create simulation box
-region             box block 0 ${length} -${width} ${width} -${dz} ${dz} units box #Create a simulation region
-region             box block 0 20 -${width} ${width} -${dz} ${dz} units box 
-region             box block 0 20 -10 ${width} -${dz} ${dz} units box 
-region             box block 0 20 -10 10 -${dz} ${dz} units box 
-region             box block 0 20 -10 10 -0.025 ${dz} units box 
-region             box block 0 20 -10 10 -0.025 0.025 units box 
-create_box         2 box #create a simulation box from the region box - with 2 types of atoms
-Created orthogonal box = (0.0000000 -10.000000 -0.025) to (20.000000 10.000000 0.025)
-  2 by 2 by 1 MPI processor grid
-
-#define regions
-region             upper block INF INF 9 10 -${dz} ${dz} units box#create the region of top plate
-region             upper block INF INF 9 10 -0.025 ${dz} units box
-region             upper block INF INF 9 10 -0.025 0.025 units box
-region             lower block INF INF -10 -9 -${dz} ${dz} units box
-region             lower block INF INF -10 -9 -0.025 ${dz} units box
-region             lower block INF INF -10 -9 -0.025 0.025 units box
-region             boundary union 2 upper lower
-region             flow block INF INF -8.99 8.99 -${dz} ${dz} units box
-region             flow block INF INF -8.99 8.99 -0.025 ${dz} units box
-region             flow block INF INF -8.99 8.99 -0.025 0.025 units box
-
-#create atoms in regions
-create_atoms       2 region boundary
-Created 720 atoms
+create_atoms       2 region topwall
+Created 320 atoms
   create_atoms CPU = 0.001 seconds
-create_atoms       1 region flow
+create_atoms       2 region botwall
+Created 400 atoms
+  create_atoms CPU = 0.000 seconds
+create_atoms       1 region block
 Created 5680 atoms
   create_atoms CPU = 0.000 seconds
 
-# define atom groups
 group              fluid type 1
 5680 atoms in group fluid
-group              rigid type 2
-720 atoms in group rigid
+group              rig type 2
+720 atoms in group rig
 
-#Randomly displace in x and y up %20 of their spacing (sf)
+#Now randomly displace in x and y up %20 of their spacing (sf)
 variable           seed equal 135414
 variable           dr equal 0.1*${del}
 variable           dr equal 0.1*0.25
@@ -82,143 +70,105 @@ displace_atoms     fluid random 0.025 0.025 0 ${seed} units box
 displace_atoms     fluid random 0.025 0.025 0 135414 units box
 Displacing atoms ...
 
-##### Setting Physical Parameters #######
-##################################
-
 # Potential parameters eta = 1, cs = 0 so force gives laplacian
-variable           rho0 equal 1.0 #Equilibrium density P=cs^2(rho-rho0)
-variable           mp equal ${rho0}/${n} #particle mass, fixed by density and number density
-variable           mp equal 1/${n} 
-variable           mp equal 1/16 
-variable           cs equal 5.0 #speed of sound - for pressure EoS
-variable           eta equal 1 #dynamic viscosity
-variable           zeta equal 1 #artificial viscosity - stabilizing term
-variable           Dr equal 0.05*${h3}*${cs} #density diffusion - stabilizing term to diffuse noise throughout the system
-variable           Dr equal 0.05*0.875*${cs} 
-variable           Dr equal 0.05*0.875*5 
-#variable          D equal 1.0
-#variable          kappa equal ${D}*${rho0}/${mp}
+variable           rho0 equal 1.0
+variable           mp equal ${rho0}/${n}
+variable           mp equal 1/${n}
+variable           mp equal 1/16
+variable           cs equal 5.0
+variable           eta equal 1
+variable           zeta equal 1
+variable           D equal 1.0
+variable	       kappa equal ${D}*${rho0}/${mp}
+variable	       kappa equal 1*${rho0}/${mp}
+variable	       kappa equal 1*1/${mp}
+variable	       kappa equal 1*1/0.0625
+variable           fext equal 1e-2/${n}
+variable           fext equal 1e-2/16
 
-##### Setting Particle Properties #######
-##################################
 
-# Assign the same mass to all particles
-mass               * ${mp}
-mass               * 0.0625
-
-# Assign particle groups to a phase (4=solid, 0=fluid)
-set                group rigid phase 4
-Setting atom values ...
-  720 settings made for phase
-set                group fluid phase 0
-Setting atom values ...
-  5680 settings made for phase
-
-#Initial temperature
-set                group all temp 1.0
-Setting atom values ...
-  6400 settings made for temp
-
-#Initial velocities
-compute	            mobile fluid temp #Compute temperature for atoms in the flow group; label value as mobile
-velocity            fluid create 1.0 482748 temp mobile #Create ensemble of velocites (seed 482748) given T=1
-
-#Initial density
+# Set particle properties
+mass               1 ${mp}
+mass               1 0.0625
+mass               2 ${mp}
+mass               2 0.0625
 set                group all rho ${rho0}
 set                group all rho 1
 Setting atom values ...
   6400 settings made for rho
+set                group all phase 0
+Setting atom values ...
+  6400 settings made for phase
+set                group rig phase 4
+Setting atom values ...
+  720 settings made for phase
+set                group all temp 1.0
+Setting atom values ...
+  6400 settings made for temp
+
+#velocity           fluid set 0.0 -1 0.0 units box
 
 
-##### Define Physical Equations #######
-##################################
+#Integration and Kernel
+fix                1 all rheo ${h3} CRK2 0 shift # rhosum 1
+fix                1 all rheo 1.125 CRK2 0 shift 
+#fix                2 all rheo/viscosity constant ${eta}
+fix                2 all rheo/viscosity power ${eta} 1e-3 1e-2 0.5
+fix                2 all rheo/viscosity power 1 1e-3 1e-2 0.5
+fix                3 all rheo/surface ${h3} 1.5 10
+fix                3 all rheo/surface 1.125 1.5 10
 
-fix                1 all rheo ${h3} CRK2 0 shift # rhosum 1  shift
-fix                1 all rheo 0.875 CRK2 0 shift 
-fix                2 all rheo/surface ${h3} 1.5 10
-fix                2 all rheo/surface 0.875 1.5 10
-fix                3 all rheo/viscosity constant ${eta}
-fix                3 all rheo/viscosity constant 1
-#fix                3 all rheo/viscosity power ${eta} 1e-3 1e-2 0.5
+fix                4 rig setforce 0.0 0.0 0.0
+fix                5 fluid addforce ${fext} 0.0 0.0
+fix                5 fluid addforce 0.000625 0.0 0.0
 
+variable           Dr equal 0.2*${h3}*${cs}
+variable           Dr equal 0.2*1.125*${cs}
+variable           Dr equal 0.2*1.125*5
 pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr}
-pair_style         rheo 0.875 artificial/visc ${zeta} rho/damp ${Dr}  
-pair_style         rheo 0.875 artificial/visc 1 rho/damp ${Dr}  
-pair_style         rheo 0.875 artificial/visc 1 rho/damp 0.21875  
+pair_style         rheo 1.125 artificial/visc ${zeta} rho/damp ${Dr}  
+pair_style         rheo 1.125 artificial/visc 1 rho/damp ${Dr}  
+pair_style         rheo 1.125 artificial/visc 1 rho/damp 1.125  
 pair_coeff         * * ${rho0} ${cs}
 pair_coeff         * * 1 ${cs}
 pair_coeff         * * 1 5
 
-#This rescales temp to prevent the system from expanding indefinitely
-# fix	         4 fluid temp/rescale 500 1.0 1.0 0.05 1.0
-# fix_modify   4 temp mobile
-
-
-##### Define Poiseuille Flow System Boundaries #######
-##################################
-
-variable           fext equal 1e-2/${n} #External force (acts as a pressure gradient)
-variable           fext equal 1e-2/16 
-fix                5 rigid setforce 0.0 0.0 0.0
-fix                6 fluid addforce ${fext} 0.0 0.0
-fix                6 fluid addforce 0.000625 0.0 0.0
-fix	               7 all enforce2d
-
-##### Timesteps #######
-##################################
-
-#Ensures that the timestep is smaller than values, as per CFL criteria
-variable           dt_max equal  0.1*${h3}/${cs}/3
-variable           dt_max equal  0.1*0.875/${cs}/3
-variable           dt_max equal  0.1*0.875/5/3
-
-#variable           dx_max equal ${h3}/100
+#Timestep
+variable           dt_max equal  0.1*${h3}/${cs}/3#0
+variable           dt_max equal  0.1*1.125/${cs}/3
+variable           dt_max equal  0.1*1.125/5/3
+#variable           dt_max equal 0.125*${h3}*${h3}/${eta}/9
+variable           dx_max equal ${h3}/100
+variable           dx_max equal 1.125/100
 timestep           ${dt_max}
-timestep           0.00583333333333333
-variable           t_tot equal 200
-variable           Nsteps equal round(${t_tot}/${dt_max})
-variable           Nsteps equal round(200/${dt_max})
-variable           Nsteps equal round(200/0.00583333333333333)
+timestep           0.0075
+#fix                dtr all dt/reset 1 NULL ${dt_max} ${dx_max}  units box
 
-##### Defining Output Setting #######
-##################################
 
-#Compute atom properties to output in dump file
 compute            den all property/atom rho
 compute            phase all property/atom phase
 compute            eta all property/atom viscosity
 
-#Define a chunk consisting of the fluid atoms
-compute            fluid_chunk fluid chunk/atom type
-#For the fluid_chunk, calculate the average x velocity
-fix                8 fluid ave/chunk 10 10 100 fluid_chunk vx norm none file vel.profile
+thermo             500
+thermo_style       custom step time etotal temp press
 
-#log file output and output frequency
-thermo             200
-thermo_style       custom step time ke temp press
-thermo_modify      norm no #report properties as extensive, not intensive (i.e. per mol)
+thermo_modify      norm no
+dump               1 all custom 500 channel_constant_eta.atoms id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
+dump               2 all netcdf 500 channel_constant_eta.nc id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
 
-#define a dump file
-dump               1 all custom 200 poise.atoms id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
-dump               2 all netcdf 200 poise.nc id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
-
-#modify neighbor bin size based on the cutoff distance h3
 variable           skin equal 0.2*${h3}
-variable           skin equal 0.2*0.875
+variable           skin equal 0.2*1.125
 neighbor           ${skin} bin
-neighbor           0.175 bin
-neigh_modify       one 10000 #increase number of allowed neighbors
-
-#run for n steps
-run ${Nsteps}
-run 34286
+neighbor           0.225 bin
+neigh_modify       one 10000
+run 50000
 WARNING: One or more atoms are time integrated more than once (src/modify.cpp:285)
 Neighbor list info ...
   update every 1 steps, delay 10 steps, check yes
   max neighbors/atom: 10000, page size: 100000
-  master list distance cutoff = 1.05
-  ghost atom cutoff = 1.05
-  binsize = 0.525, bins = 39 39 1
+  master list distance cutoff = 1.35
+  ghost atom cutoff = 1.35
+  binsize = 0.675, bins = 30 30 1
   6 neighbor lists, perpetual/occasional/extra = 6 0 0
   (1) pair rheo, perpetual, half/full from (2)
       attributes: half, newton off
@@ -250,207 +200,82 @@ Neighbor list info ...
       pair build: copy
       stencil: none
       bin: none
-Per MPI rank memory allocation (min/avg/max) = 31.86 | 31.97 | 32.24 Mbytes
-Step Time KinEng Temp Press 
-       0            0         5679   0.88748242    40.066589 
-     200    1.1666667    10.961526  0.001713006   0.15413213 
-     400    2.3333333    4.7827146 0.00074741595   0.13524281 
-     600          3.5    3.1415117 0.00049093792   0.12750149 
-     800    4.6666667    1.8996083 0.00029686019   0.13781868 
-    1000    5.8333333    1.5125491 0.00023637273   0.13708039 
-    1200            7    1.2423193 0.00019414272    0.1381811 
-    1400    8.1666667    1.0758925 0.00016813448   0.14710367 
-    1600    9.3333333     1.096898 0.0001714171   0.14815112 
-    1800         10.5    1.1861254 0.00018536106   0.14915147 
-    2000    11.666667    1.2273002 0.00019179562   0.15538305 
-    2200    12.833333    1.3791668 0.00021552849   0.15691299 
-    2400           14    1.6070425 0.00025113963   0.15866826 
-    2600    15.166667    1.7618633 0.00027533417   0.16470873 
-    2800    16.333333    1.9418972 0.00030346885   0.16642069 
-    3000         17.5    2.2389359 0.0003498884    0.1674597 
-    3200    18.666667    2.4399269 0.00038129815   0.17131405 
-    3400    19.833333    2.6370122 0.00041209755   0.17276019 
-    3600           21    2.9668776 0.00046364707   0.17439164 
-    3800    22.166667    3.1860271 0.00049789453   0.17817752 
-    4000    23.333333    3.3969079 0.00053084981   0.17978965 
-    4200         24.5    3.7315305 0.00058314275   0.18078282 
-    4400    25.666667    3.9620427 0.00061916591   0.18289945 
-    4600    26.833333    4.1774392 0.00065282688   0.18409598 
-    4800           28    4.5039464 0.0007038516   0.18527841 
-    5000    29.166667     4.740683 0.00074084748   0.18798759 
-    5200    30.333333     4.956698 0.00077460509    0.1897488 
-    5400         31.5    5.2760251 0.00082450774   0.19030944 
-    5600    32.666667    5.5447776 0.0008665069   0.19194325 
-    5800    33.833333    5.7392645 0.00089690021   0.19270985 
-    6000           35    6.0507779 0.00094558179   0.19463689 
-    6200    36.166667    6.2676693 0.00097947637   0.19620646 
-    6400    37.333333    6.4692297 0.0010109751   0.19732482 
-    6600         38.5    6.7438857 0.0010538968   0.19794221 
-    6800    39.666667     6.974354 0.0010899131    0.1988766 
-    7000    40.833333    7.1684766 0.0011202495   0.19935226 
-    7200           42    7.4201828 0.0011595847   0.20004017 
-    7400    43.166667    7.6422761 0.0011942923     0.201557 
-    7600    44.333333    7.8270023 0.0012231602   0.20233696 
-    7800         45.5    8.0607346 0.0012596866   0.20273736 
-    8000    46.666667    8.2741342 0.0012930355   0.20324934 
-    8200    47.833333    8.4492318 0.0013203988   0.20337975 
-    8400           49    8.6634302 0.0013538725   0.20384294 
-    8600    50.166667    8.8684975 0.0013859193     0.204783 
-    8800    51.333333    9.0379785 0.0014124048   0.20521735 
-    9000         52.5    9.2347241 0.0014431511   0.20520686 
-    9200    53.666667    9.4267311 0.0014731569   0.20547299 
-    9400    54.833333    9.5834796 0.0014976527   0.20543294 
-    9600           56    9.7612329  0.001525431   0.20546862 
-    9800    57.166667     9.940375 0.0015534263   0.20583437 
-   10000    58.333333    10.088242 0.0015765342   0.20605151 
-   10200         59.5    10.249512 0.0016017365   0.20616823 
-   10400    60.666667    10.414424 0.0016275081   0.20620211 
-   10600    61.833333    10.550505  0.001648774   0.20574414 
-   10800           63    10.692585 0.0016709775    0.2054836 
-   11000    64.166667    10.841429 0.0016942379   0.20572206 
-   11200    65.333333    10.968517 0.0017140986    0.2058813 
-   11400         66.5    11.098096 0.0017343484   0.20582228 
-   11600    67.666667    11.234531 0.0017556697   0.20563819 
-   11800    68.833333    11.351482 0.0017739463    0.2053372 
-   12000           70     11.46884 0.0017922862   0.20511433 
-   12200    71.166667    11.595666  0.001812106   0.20494866 
-   12400    72.333333     11.70589 0.0018293311    0.2048801 
-   12600         73.5    11.811649 0.0018458586    0.2047101 
-   12800    74.666667     11.92388 0.0018633974   0.20435136 
-   13000    75.833333    12.022408 0.0018787949   0.20405524 
-   13200           77    12.115706  0.001893375   0.20396738 
-   13400    78.166667    12.217023 0.0019092082   0.20408972 
-   13600    79.333333    12.310223 0.0019237729   0.20413895 
-   13800         80.5    12.397647 0.0019374351   0.20410635 
-   14000    81.666667    12.490571 0.0019519568   0.20391209 
-   14200    82.833333    12.575411  0.001965215   0.20348505 
-   14400           84    12.653115 0.0019773582   0.20310381 
-   14600    85.166667    12.736136 0.0019903323   0.20290501 
-   14800    86.333333    12.815698 0.0020027657   0.20274847 
-   15000         87.5    12.889461  0.002014293   0.20247227 
-   15200    88.666667    12.967279  0.002026454   0.20220706 
-   15400    89.833333    13.040486 0.0020378943   0.20189331 
-   15600           91    13.105588 0.0020480681   0.20166884 
-   15800    92.166667    13.172499 0.0020585246   0.20154188 
-   16000    93.333333    13.236844 0.0020685801   0.20139784 
-   16200         94.5     13.29496 0.0020776621   0.20115204 
-   16400    95.666667    13.354466 0.0020869614    0.2009283 
-   16600    96.833333    13.412865 0.0020960877    0.2006325 
-   16800           98    13.465458 0.0021043066   0.20017408 
-   17000    99.166667    13.518064 0.0021125276   0.19996717 
-   17200    100.33333    13.570793 0.0021207678   0.19993124 
-   17400        101.5    13.619827 0.0021284305   0.19985626 
-   17600    102.66667    13.670075  0.002136283   0.19974637 
-   17800    103.83333    13.720079 0.0021440973     0.199534 
-   18000          105     13.76596 0.0021512675   0.19925651 
-   18200    106.16667    13.810187  0.002158179   0.19898666 
-   18400    107.33333    13.853891 0.0021650087   0.19888005 
-   18600        108.5    13.893488 0.0021711967    0.1987318 
-   18800    109.66667    13.932243 0.0021772532   0.19858557 
-   19000    110.83333    13.971548 0.0021833956   0.19846963 
-   19200          112    14.011342 0.0021896143   0.19855664 
-   19400    113.16667    14.048132 0.0021953637   0.19831098 
-   19600    114.33333    14.084812 0.0022010958   0.19811904 
-   19800        115.5    14.119547  0.002206524   0.19792007 
-   20000    116.66667    14.154537 0.0022119921   0.19772309 
-   20200    117.83333     14.19144  0.002217759   0.19755397 
-   20400          119    14.229287 0.0022236735   0.19753629 
-   20600    120.16667    14.262624 0.0022288832   0.19743852 
-   20800    121.33333    14.293145 0.0022336529   0.19737256 
-   21000        122.5    14.319845 0.0022378255   0.19724091 
-   21200    123.66667    14.344523  0.002241682   0.19715057 
-   21400    124.83333    14.369939 0.0022456539   0.19708833 
-   21600          126     14.39445 0.0022494843   0.19702951 
-   21800    127.16667     14.41793 0.0022531536   0.19700956 
-   22000    128.33333    14.441165 0.0022567846   0.19694677 
-   22200        129.5    14.463317 0.0022602464     0.196925 
-   22400    130.66667    14.484861 0.0022636133   0.19689985 
-   22600    131.83333    14.507311 0.0022671216   0.19688258 
-   22800          133    14.529872 0.0022706472   0.19690137 
-   23000    134.16667    14.549858 0.0022737706   0.19690803 
-   23200    135.33333    14.567793 0.0022765734   0.19694758 
-   23400        136.5    14.584362 0.0022791627   0.19707576 
-   23600    137.66667    14.599853 0.0022815835   0.19709489 
-   23800    138.83333    14.614907 0.0022839361   0.19702728 
-   24000          140     14.62934 0.0022861915   0.19689379 
-   24200    141.16667    14.642705 0.0022882802   0.19669904 
-   24400    142.33333    14.656684 0.0022904648   0.19659403 
-   24600        143.5    14.671218  0.002292736   0.19658381 
-   24800    144.66667    14.684717 0.0022948456    0.1965671 
-   25000    145.83333    14.697437 0.0022968334   0.19651106 
-   25200          147     14.70996 0.0022987904   0.19644792 
-   25400    148.16667     14.72154 0.0023006001   0.19633362 
-   25600    149.33333    14.732955  0.002302384   0.19621488 
-   25800        150.5    14.744757 0.0023042284   0.19605997 
-   26000    151.66667     14.75582 0.0023059572   0.19598833 
-   26200    152.83333    14.764229 0.0023072714    0.1957993 
-   26400          154    14.772497 0.0023085633   0.19570376 
-   26600    155.16667     14.78087 0.0023098718   0.19552578 
-   26800    156.33333    14.789742 0.0023112583   0.19533571 
-   27000        157.5    14.794413 0.0023119883   0.19503449 
-   27200    158.66667    14.797896 0.0023125327   0.19495299 
-   27400    159.83333     14.80207 0.0023131849   0.19481396 
-   27600          161    14.807409 0.0023140192   0.19470147 
-   27800    162.16667    14.814027 0.0023150535   0.19461073 
-   28000    163.33333    14.821496 0.0023162207   0.19448454 
-   28200        164.5     14.82966 0.0023174965   0.19438055 
-   28400    165.66667    14.834391 0.0023182357   0.19410574 
-   28600    166.83333    14.838948 0.0023189479   0.19418042 
-   28800          168    14.843528 0.0023196638   0.19406107 
-   29000    169.16667    14.848186 0.0023203917   0.19392967 
-   29200    170.33333    14.853461  0.002321216   0.19385421 
-   29400        171.5    14.858561  0.002322013   0.19379286 
-   29600    172.66667    14.863315 0.0023227559   0.19371571 
-   29800    173.83333    14.867586 0.0023234233   0.19363227 
-   30000          175     14.87122 0.0023239913   0.19361898 
-   30200    176.16667    14.873906  0.002324411    0.1936228 
-   30400    177.33333    14.876139   0.00232476   0.19364663 
-   30600        178.5    14.878625 0.0023251485   0.19369529 
-   30800    179.66667    14.881974 0.0023256719   0.19370558 
-   31000    180.83333    14.885628 0.0023262429   0.19363965 
-   31200          182     14.88915 0.0023267933   0.19350723 
-   31400    183.16667    14.893057 0.0023274038   0.19347217 
-   31600    184.33333    14.897779 0.0023281417   0.19346967 
-   31800        185.5    14.903256 0.0023289976    0.1934831 
-   32000    186.66667    14.908853 0.0023298723   0.19352888 
-   32200    187.83333    14.915098 0.0023308483   0.19366156 
-   32400          189    14.921681  0.002331877    0.1937369 
-   32600    190.16667    14.927784 0.0023328307   0.19373666 
-   32800    191.33333    14.933179 0.0023336739    0.1936285 
-   33000        192.5     14.93896 0.0023345773   0.19353816 
-   33200    193.66667    14.945451 0.0023355917   0.19341988 
-   33400    194.83333    14.952301 0.0023366622   0.19331715 
-   33600          196    14.959349 0.0023377636   0.19321869 
-   33800    197.16667    14.965099 0.0023386621   0.19308881 
-   34000    198.33333    14.968861   0.00233925   0.19292491 
-   34200        199.5      14.9715 0.0023396625   0.19282634 
-   34286    200.00167    14.972436 0.0023398087   0.19281286 
-Loop time of 467.951 on 32 procs for 34286 steps with 6400 atoms
-
-Performance: 36927.223 tau/day, 73.268 timesteps/s
-99.7% CPU use with 4 MPI tasks x 8 OpenMP threads
-
-MPI task timing breakdown:
-Section |  min time  |  avg time  |  max time  |%varavg| %total
----------------------------------------------------------------
-Pair    | 86.136     | 87.806     | 89.749     |  15.0 | 18.76
-Neigh   | 0.73672    | 0.74671    | 0.75657    |   1.1 |  0.16
-Comm    | 1.7407     | 1.9522     | 2.1976     |  13.9 |  0.42
-Output  | 0.94463    | 0.94748    | 0.94854    |   0.2 |  0.20
-Modify  | 370.88     | 371.8      | 372.22     |   2.8 | 79.45
-Other   |            | 4.695      |            |       |  1.00
-
-Nlocal:        1600.00 ave        1625 max        1576 min
-Histogram: 2 0 0 0 0 0 0 0 0 2
-Nghost:        763.000 ave         787 max         741 min
-Histogram: 2 0 0 0 0 0 0 0 0 2
-Neighs:        48193.0 ave       48957 max       47449 min
-Histogram: 2 0 0 0 0 0 0 0 0 2
-FullNghs:      88512.0 ave       89918 max       87134 min
-Histogram: 2 0 0 0 0 0 0 0 0 2
-
-Total # of neighbors = 354048
-Ave neighs/atom = 55.320000
-Neighbor list builds = 802
-Dangerous builds = 22
-Total wall time: 0:07:47
+Per MPI rank memory allocation (min/avg/max) = 31.45 | 31.48 | 31.51 Mbytes
+Step Time TotEng Temp Press 
+       0            0            0            0            0 
+     500         3.75   0.22996074 3.5936981e-05 -3.1625141e-05 
+    1000          7.5   0.90804102 0.00014190358 0.00085431596 
+    1500        11.25    2.0253927 0.00031651706 0.0026140891 
+    2000           15    3.5765248 0.00055891933 0.0050782757 
+    2500        18.75    5.5550622 0.00086811411 0.0084468359 
+    3000         22.5    7.9564857 0.0012433952  0.012388041 
+    3500        26.25    10.774385 0.0016837607  0.017254256 
+    4000           30    14.004772 0.0021885876  0.022806841 
+    4500        33.75    17.644233 0.0027573422   0.02917088 
+    5000         37.5    21.689092 0.0033894502  0.036271067 
+    5500        41.25    26.135057 0.0040842408  0.044143459 
+    6000           45    30.979706 0.0048413355  0.052773314 
+    6500        48.75    36.220592 0.0056603519  0.062227622 
+    7000         52.5    41.853919 0.0065406969    0.0723686 
+    7500        56.25    47.875278 0.0074816812  0.083407508 
+    8000           60    54.286697 0.0084836219  0.095122682 
+    8500        63.75    61.083243 0.0095457482    0.1076327 
+    9000         67.5    68.270259  0.010668895   0.12086255 
+    9500        71.25    75.834129  0.011850934    0.1348945 
+   10000           75    83.785076  0.013093464   0.14965346 
+   10500        78.75    92.117268  0.014395572   0.16513764 
+   11000         82.5    100.82907  0.015757005   0.18144475 
+   11500        86.25    109.91766  0.017177319   0.19848488 
+   12000           90    119.38455  0.018656751   0.21625678 
+   12500        93.75    129.22433  0.020194457   0.23475249 
+   13000         97.5    139.44568  0.021791792   0.25399415 
+   13500       101.25    150.03356  0.023446407    0.2740333 
+   14000          105    161.00122  0.025160372   0.29475728 
+   14500       108.75     172.3387   0.02693213   0.31633397 
+   15000        112.5    184.04569  0.028761633    0.3385764 
+   15500       116.25    196.12363  0.030649107   0.36151531 
+   16000          120    208.56552  0.032593456   0.38530115 
+   16500       123.75    221.38581  0.034596938   0.40974124 
+   17000        127.5    234.56727  0.036656863   0.43494286 
+   17500       131.25    248.11751   0.03877442   0.46089535 
+   18000          135    262.03486  0.040949345   0.48750763 
+   18500       138.75    276.32006  0.043181756   0.51492953 
+   19000        142.5    290.96493  0.045470375   0.54308421 
+   19500       146.25    305.97737  0.047816436   0.57193659 
+   20000          150     321.3505  0.050218863   0.60155779 
+   20500       153.75    337.08266  0.052677397   0.63186409 
+   21000        157.5    353.18973   0.05519452   0.66297077 
+   21500       161.25     369.6553  0.057767667   0.69463431 
+   22000          165    386.47106   0.06039554   0.72721397 
+   22500       168.75     403.6557   0.06308106   0.76037022 
+   23000        172.5    421.19925  0.065822668   0.79430654 
+   23500       176.25    439.12022  0.068623257   0.82899475 
+   24000          180    457.36779  0.071474885   0.86442043 
+   24500       183.75    475.98878  0.074384869   0.90040517 
+   25000        187.5    494.98092  0.077352854   0.93739525 
+   25500       191.25    514.31996  0.080375052   0.97479227 
+   26000          195     534.0247  0.083454399    1.0131266 
+   26500       198.75    554.07981    0.0865885    1.0521005 
+   27000        202.5    574.49777  0.089779304    1.0917629 
+   27500       206.25    595.29252  0.093028992    1.1322574 
+   28000          210    616.42702  0.096331773    1.1733985 
+   28500       213.75    637.92074  0.099690692    1.2152066 
+   29000        217.5    659.77542   0.10310602    1.2576988 
+   29500       221.25    681.98939    0.1065775    1.3009745 
+   30000          225    704.54068   0.11010168    1.3449912 
+   30500       228.75    727.47182   0.11368524    1.3896501 
+   31000        232.5    750.72864   0.11731968      1.43497 
+   31500       236.25    774.37028   0.12101427    1.4812398 
+   32000          240    798.37819   0.12476609    1.5280116 
+   32500       243.75    822.74707   0.12857432    1.5756492 
+   33000        247.5    847.47057   0.13243797    1.6238124 
+   33500       251.25    872.51978   0.13635252    1.6728116 
+   34000          255    897.97055   0.14032982    1.7224634 
+   34500       258.75    923.75573   0.14435939    1.7728619 
+   35000        262.5    949.89493   0.14844428    1.8239943 
+   35500       266.25    976.40567   0.15258723    1.8757105 
+   36000          270    1003.2766   0.15678647    1.9282944 
+   36500       273.75    1030.5199    0.1610439    1.9815903 
+   37000        277.5    1058.1179   0.16535677    2.0356382 
+   37500       281.25     1086.049   0.16972167    2.0901418 
+   38000   

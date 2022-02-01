@@ -86,8 +86,8 @@ set                group all rho ${rho0}
 
 fix                1 all rheo ${h3} CRK2 0 shift # rhosum 1  shift
 fix                2 all rheo/surface ${h3} 1.5 10                 
-fix                3 all rheo/viscosity constant ${eta}
-#fix                3 all rheo/viscosity power ${eta} 1e-3 1e-2 0.5 
+#fix                3 all rheo/viscosity constant ${eta}
+fix                3 all rheo/viscosity power ${eta} 1e-3 1e-2 0.5
 
 pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr} 
 pair_coeff         * * ${rho0} ${cs}
@@ -103,7 +103,7 @@ pair_coeff         * * ${rho0} ${cs}
 variable           fext equal 1e-2/${n} #External force (acts as a pressure gradient)
 fix                5 rigid setforce 0.0 0.0 0.0
 fix                6 fluid addforce ${fext} 0.0 0.0
-fix	               7 all enforce2d
+#fix	               7 all enforce2d
 
 ##### Timesteps #######
 ################################## 
@@ -113,7 +113,7 @@ variable           dt_max equal  0.1*${h3}/${cs}/3
 
 #variable           dx_max equal ${h3}/100
 timestep           ${dt_max} 
-variable           t_tot equal 200
+variable           t_tot equal 100
 variable           Nsteps equal round(${t_tot}/${dt_max})
 
 ##### Defining Output Setting #######
@@ -124,19 +124,19 @@ compute            den all property/atom rho
 compute            phase all property/atom phase
 compute            eta all property/atom viscosity
 
-#Define a chunk consisting of the fluid atoms
-compute            fluid_chunk fluid chunk/atom type
-#For the fluid_chunk, calculate the average x velocity
-fix                8 fluid ave/chunk 10 10 100 fluid_chunk vx norm none file vel.profile
+# #Define a chunk consisting of the fluid atoms
+# compute            fluid_chunk fluid chunk/atom type
+# #For the fluid_chunk, calculate the average x velocity
+# fix                8 fluid ave/chunk 10 10 100 fluid_chunk vx norm none file vel.profile
 
 #log file output and output frequency
-thermo             200
+thermo             500
 thermo_style       custom step time ke temp press
 thermo_modify      norm no #report properties as extensive, not intensive (i.e. per mol)
 
 #define a dump file
-dump               1 all custom 200 poise.atoms id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
-dump               2 all netcdf 200 poise.nc id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
+dump               1 all custom 500 poise.atoms id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
+dump               2 all netcdf 500 poise.nc id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
 
 #modify neighbor bin size based on the cutoff distance h3
 variable           skin equal 0.2*${h3}

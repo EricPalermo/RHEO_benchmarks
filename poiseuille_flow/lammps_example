@@ -74,4 +74,4 @@ dump		1 all atom 500 dump.flow
 #		zoom 1.6 adiam 1.5
 #dump_modify	3 pad 5
 
-run		10000
+run		20000
