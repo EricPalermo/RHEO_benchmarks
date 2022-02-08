@@ -12,8 +12,9 @@ newton off
 
 ## Particle Lattice/Resolution Parameters
 variable           L equal 10
+variable           t_tot equal 100
 variable           sf equal 0.1 #25 #/${L} #scaling of unit cell #scale factor for particle resolution
-# n is particle number density, depends on lattive
+# n is particle number density, depends on lattice
 variable           nb equal 1    #number of basis atoms depends on lattice
 variable           n equal ${nb}/(${sf}^3) # number of particles per volume
 variable           n equal 1/(${sf}^3) 
@@ -30,28 +31,24 @@ variable           h3 equal ${hd}*${del}
 variable           h3 equal 3.5*${del}
 variable           h3 equal 3.5*0.1
 
-
-# create simulation box
-#variable          dz equal 0.1*${sf} #For 2D, make sure that z-dimension only has 1 particle layer
+variable           dz equal 0.1*${sf} #For 2D, make sure that z-dimension only has 1 particle layer
+variable           dz equal 0.1*0.1 
 region             box block 0 ${L} 0 ${L} -${h3} ${h3} units box #create a 2D box using box units (vs lattice units)
 region             box block 0 10 0 ${L} -${h3} ${h3} units box 
 region             box block 0 10 0 10 -${h3} ${h3} units box 
 region             box block 0 10 0 10 -0.35 ${h3} units box 
 region             box block 0 10 0 10 -0.35 0.35 units box 
-create_box         2 box #create a simulation box from the region box - with 2 types of atoms
+create_box         1 box #create a simulation box from the region box - with 2 types of atoms
 Created orthogonal box = (0.0000000 0.0000000 -0.35) to (10.000000 10.000000 0.35)
   2 by 2 by 1 MPI processor grid
-change_box         all triclinic
-Changing box ...
-  triclinic box = (0.0000000 0.0000000 -0.35) to (10.000000 10.000000 0.35) with tilt (0.0000000 0.0000000 0.0000000)
-
 #Create atoms in our whole simulation box
 create_atoms       1 region box #creates atoms of type 1 within the box region
 Created 70000 atoms
-  create_atoms CPU = 0.002 seconds
+  create_atoms CPU = 0.003 seconds
+
+
 
 # Assign all particles of type 1 to a group fluid
-
 group              fluid type 1
 70000 atoms in group fluid
 #group             wall type 2
@@ -79,7 +76,7 @@ variable           mp equal ${rho0}/${n} #particle mass, fixed by density and nu
 variable           mp equal 1/${n} 
 variable           mp equal 1/1000 
 variable           cs equal 4.0 #speed of sound - for pressure EoS
-variable           eta equal 0.01 #dynamic viscosity
+variable           eta equal 0.1 #dynamic viscosity
 variable           zeta equal 1 #artificial viscosity - stabilizing term
 variable           Dr equal 0.05*${h3}*${cs} #density diffusion - stabilizing term to diffuse noise throughout the system
 variable           Dr equal 0.05*0.35*${cs} 
@@ -99,26 +96,26 @@ set                group all temp 1.0
 Setting atom values ...
   70000 settings made for temp
 
-variable           u0 equal 0.1
+variable           u0 equal 0.05
 variable           k  equal 2*PI/${L}
 variable           k  equal 2*PI/10
 
 variable           ux atom ${u0}*cos(${k}*x)*sin(${k}*y)
-variable           ux atom 0.1*cos(${k}*x)*sin(${k}*y)
-variable           ux atom 0.1*cos(0.628318530717959*x)*sin(${k}*y)
-variable           ux atom 0.1*cos(0.628318530717959*x)*sin(0.628318530717959*y)
+variable           ux atom 0.05*cos(${k}*x)*sin(${k}*y)
+variable           ux atom 0.05*cos(0.628318530717959*x)*sin(${k}*y)
+variable           ux atom 0.05*cos(0.628318530717959*x)*sin(0.628318530717959*y)
 variable           uy atom -${u0}*sin(${k}*x)*cos(${k}*y)
-variable           uy atom -0.1*sin(${k}*x)*cos(${k}*y)
-variable           uy atom -0.1*sin(0.628318530717959*x)*cos(${k}*y)
-variable           uy atom -0.1*sin(0.628318530717959*x)*cos(0.628318530717959*y)
+variable           uy atom -0.05*sin(${k}*x)*cos(${k}*y)
+variable           uy atom -0.05*sin(0.628318530717959*x)*cos(${k}*y)
+variable           uy atom -0.05*sin(0.628318530717959*x)*cos(0.628318530717959*y)
 variable           uz atom 0
 variable           d0 atom ${rho0}-${u0}*${u0}*${rho0}*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
 variable           d0 atom 1-${u0}*${u0}*${rho0}*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
-variable           d0 atom 1-0.1*${u0}*${rho0}*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
-variable           d0 atom 1-0.1*0.1*${rho0}*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
-variable           d0 atom 1-0.1*0.1*1*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
-variable           d0 atom 1-0.1*0.1*1*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/4/${cs}
-variable           d0 atom 1-0.1*0.1*1*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/4/4
+variable           d0 atom 1-0.05*${u0}*${rho0}*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
+variable           d0 atom 1-0.05*0.05*${rho0}*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
+variable           d0 atom 1-0.05*0.05*1*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
+variable           d0 atom 1-0.05*0.05*1*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/4/${cs}
+variable           d0 atom 1-0.05*0.05*1*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/4/4
 
 velocity           all set v_ux v_uy v_uz units box
 set                group all rho v_d0
@@ -129,12 +126,12 @@ Setting atom values ...
 ##### Define Physical Equations #######
 ##################################
 
-fix                1 all rheo ${h3} Quintic 0 #shift # rhosum 1  shift
-fix                1 all rheo 0.35 Quintic 0 
+fix                1 all rheo ${h3} CRK0 0 shift # rhosum 1  shift
+fix                1 all rheo 0.35 CRK0 0 shift 
 fix                2 all rheo/surface ${h3} 1.5 10
 fix                2 all rheo/surface 0.35 1.5 10
 fix                3 all rheo/viscosity constant ${eta}
-fix                3 all rheo/viscosity constant 0.01
+fix                3 all rheo/viscosity constant 0.1
 
 pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr}
 pair_style         rheo 0.35 artificial/visc ${zeta} rho/damp ${Dr}  
@@ -146,20 +143,18 @@ pair_coeff         * * 1 4
 
 #Timestep
 #Ensures that the timestep is smaller than values, as per CFL criteria
-variable           dt_max equal  0.1*${h3}/${cs}/3 #0
-variable           dt_max equal  0.1*0.35/${cs}/3 
-variable           dt_max equal  0.1*0.35/4/3 
+#variable           dt_max equal  0.1*${h3}/${cs}/3
+variable           dt_max equal  0.1*${h3}/${cs}/3
+variable           dt_max equal  0.1*0.35/${cs}/3
+variable           dt_max equal  0.1*0.35/4/3
+
 #variable           dx_max equal ${h3}/100
-#variable           dt_max equal  0.1*${hd}*0.1/${cs}/3#0
-
-variable           t_tot equal 250
-variable           Nsteps equal round(${t_tot}/${dt_max})
-variable           Nsteps equal round(250/${dt_max})
-variable           Nsteps equal round(250/0.00291666666666667)
-
 timestep           ${dt_max}
 timestep           0.00291666666666667
 
+variable           Nsteps equal round(${t_tot}/${dt_max})
+variable           Nsteps equal round(100/${dt_max})
+variable           Nsteps equal round(100/0.00291666666666667)
 
 ##### Defining Output Setting #######
 ##################################
@@ -175,9 +170,8 @@ thermo_style       custom step time ke temp press
 thermo_modify      norm no #report properties as extensive, not intensive (i.e. per mol)
 
 #define a dump file
-dump               1 all custom 200 0_0_5.atoms id type x y z vx vy vz fx fy fz c_den c_phase f_rheo_chi_chi c_eta
-dump               2 all netcdf 200 0_0_10.nc id type x y z vx vy vz fx fy fz c_den c_phase f_rheo_chi_chi c_eta
-#dump_modify        1 append yes at -1 thermo yes
+dump               1 all custom 200 1_0_10.atoms id type x y z vx vy vz fx fy fz c_den c_phase f_rheo_chi_chi c_eta
+dump               2 all netcdf 200 1_0_10.nc id type x y z vx vy vz fx fy fz c_den c_phase f_rheo_chi_chi c_eta
 
 #modify neighbor bin size based on the cutoff distance h3
 variable           skin equal 0.2*${h3}
@@ -187,9 +181,13 @@ neighbor           0.07 bin
 neigh_modify       one 10000 #increase number of allowed neighbors
 
 #run for n steps
-run ${Nsteps}
-run 85714
+run ${Nsteps} #upto
+run 34286 
+WARNING: One or more atoms are time integrated more than once (src/modify.cpp:285)
 Neighbor list info ...
   update every 1 steps, delay 10 steps, check yes
   max neighbors/atom: 10000, page size: 100000
-  master list distan
+  master list distance cutoff = 0.42
+  ghost atom cutoff = 0.42
+  binsize = 0.21, bins = 48 48 4
+  6 neighbor lists, perpetual/occasio
