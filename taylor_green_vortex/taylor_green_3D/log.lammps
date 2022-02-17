@@ -44,7 +44,7 @@ Created orthogonal box = (0.0000000 0.0000000 -0.35) to (10.000000 10.000000 0.3
 #Create atoms in our whole simulation box
 create_atoms       1 region box #creates atoms of type 1 within the box region
 Created 70000 atoms
-  create_atoms CPU = 0.003 seconds
+  create_atoms CPU = 0.002 seconds
 
 
 

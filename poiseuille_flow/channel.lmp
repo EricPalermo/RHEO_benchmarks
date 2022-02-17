@@ -60,9 +60,9 @@ set                group all temp 1.0
 
 
 #Integration and Kernel
-fix                1 all rheo ${h3} CRK1 0 shift # rhosum 1
-fix                2 all rheo/viscosity constant ${eta} 
-#fix                2 all rheo/viscosity power ${eta} 1e-3 1e-2 0.5 
+fix                1 all rheo ${h3} CRK2 0 shift # rhosum 1
+#fix                2 all rheo/viscosity constant ${eta} 
+fix                2 all rheo/viscosity power ${eta} 1e-3 1e-2 0.5 
 fix                3 all rheo/surface ${h3} 1.5 10
 
 fix                4 rig setforce 0.0 0.0 0.0

@@ -12,7 +12,7 @@ newton on
 
 ## Particle Lattice/Resolution Parameters
 variable           L equal 5 #Particle radius
-variable           t_tot equal 10
+variable           t_tot equal 15
 variable           sf equal 0.1 #25 #/${L} #scaling of unit cell #scale factor for particle resolution
 # n is particle number density, depends on lattive
 variable           nb equal 1    #number of basis atoms depends on lattice
@@ -85,9 +85,9 @@ variable           mp equal 1/100
 variable           cs equal 4 #speed of sound - for pressure EoS
 variable           eta equal 0.0 #dynamic viscosity
 variable           zeta equal 1 #artificial viscosity - stabilizing term
-variable           Dr equal 0.2*${h3}*${cs} #density diffusion - stabilizing term to diffuse noise throughout the system
-variable           Dr equal 0.2*0.35*${cs} 
-variable           Dr equal 0.2*0.35*4 
+variable           Dr equal 0.05*${h3}*${cs} #density diffusion - stabilizing term to diffuse noise throughout the system
+variable           Dr equal 0.05*0.35*${cs} 
+variable           Dr equal 0.05*0.35*4 
 #variable          D equal 1.0
 #variable          kappa equal ${D}*${rho0}/${mp}
 #variable          fext equal 5e-3/${n}
@@ -103,11 +103,11 @@ set                group all temp 1.0
 Setting atom values ...
   7837 settings made for temp
 
-variable           sigma0 equal 0.1
+variable           sigma0 equal 0.05
 variable           ux atom  ${sigma0}*x
-variable           ux atom  0.1*x
+variable           ux atom  0.05*x
 variable           uy atom -${sigma0}*y
-variable           uy atom -0.1*y
+variable           uy atom -0.05*y
 
 variable           Q_0 equal 1
 #variable           d0 atom ${Q_0}*(1-(x*x/${L}/${L})-(y*y/${L}/${L}))/${cs}/${cs}
@@ -122,17 +122,16 @@ Setting atom values ...
 ##### Define Physical Equations #######
 ##################################
 
-fix                1 all rheo ${h3} CRK0 0 shift # rhosum 1  shift
-fix                1 all rheo 0.35 CRK0 0 shift 
-fix                2 all rheo/surface ${h3} 1.4 1
-fix                2 all rheo/surface 0.35 1.4 1
+fix                1 all rheo ${h3} Quintic 0 shift # rhosum 1  shift
+fix                1 all rheo 0.35 Quintic 0 shift 
+#fix                2 all rheo/surface ${h3} 1.5 10
 fix                3 all rheo/viscosity constant ${eta}
 fix                3 all rheo/viscosity constant 0
 
 pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr}
 pair_style         rheo 0.35 artificial/visc ${zeta} rho/damp ${Dr}  
 pair_style         rheo 0.35 artificial/visc 1 rho/damp ${Dr}  
-pair_style         rheo 0.35 artificial/visc 1 rho/damp 0.28  
+pair_style         rheo 0.35 artificial/visc 1 rho/damp 0.07  
 pair_coeff         * * ${rho0} ${cs}
 pair_coeff         * * 1 ${cs}
 pair_coeff         * * 1 4
@@ -148,8 +147,8 @@ timestep           ${dt_max}
 timestep           0.00291666666666667
 
 variable           Nsteps equal round(${t_tot}/${dt_max})
-variable           Nsteps equal round(10/${dt_max})
-variable           Nsteps equal round(10/0.00291666666666667)
+variable           Nsteps equal round(15/${dt_max})
+variable           Nsteps equal round(15/0.00291666666666667)
 
 ##### Defining Output Setting #######
 ##################################
@@ -165,8 +164,8 @@ thermo_style       custom step time ke temp press
 thermo_modify      norm no #report properties as extensive, not intensive (i.e. per mol)
 
 #define a dump file
-dump               1 all custom 200 0_0_10.atoms id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta c_phase
-dump               2 all netcdf 200 0_0_10.nc id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
+dump               1 all custom 200 0_5_10.atoms id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
+dump               2 all netcdf 200 0_5_10.nc id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta
 
 #modify neighbor bin size based on the cutoff distance h3
 variable           skin equal 0.2*${h3}
@@ -177,7 +176,7 @@ neigh_modify       one 10000 #increase number of allowed neighbors
 
 #run for n steps
 run ${Nsteps}
-run 3429
+run 5143
 WARNING: One or more atoms are time integrated more than once (src/modify.cpp:285)
 Neighbor list info ...
   update every 1 steps, delay 10 steps, check yes
@@ -185,7 +184,7 @@ Neighbor list info ...
   master list distance cutoff = 0.42
   ghost atom cutoff = 0.42
   binsize = 0.21, bins = 48 48 1
-  6 neighbor lists, perpetual/occasional/extra = 6 0 0
+  5 neighbor lists, perpetual/occasional/extra = 5 0 0
   (1) pair rheo, perpetual, half/full from (2)
       attributes: half, newton on
       pair build: halffull/newton
@@ -211,58 +210,61 @@ Neighbor list info ...
       pair build: copy
       stencil: none
       bin: none
-  (6) fix rheo/surface, perpetual, copy from (1)
-      attributes: half, newton on
-      pair build: copy
-      stencil: none
-      bin: none
-Per MPI rank memory allocation (min/avg/max) = 31.26 | 31.27 | 31.27 Mbytes
+Per MPI rank memory allocation (min/avg/max) = 28.07 | 28.07 | 28.08 Mbytes
 Step Time KinEng Temp Press 
-       0            0    4.8875307 0.00062372776  0.049382345 
-     200   0.58333333      4.88057 0.00062283947  0.078501924 
-     400    1.1666667    4.8493182 0.00061885123   0.12483771 
-     600         1.75    4.8316957 0.00061660232   0.13699571 
-     800    2.3333333    4.8577494 0.00061992718  0.094494401 
-    1000    2.9166667    4.8654845 0.0006209143  0.043861948 
-    1200          3.5    4.8628775 0.00062058161   0.04717102 
-    1400    4.0833333    4.8480561 0.00061869016   0.09598951 
-    1600    4.6666667    4.8287245 0.00061622314   0.11553699 
-    1800         5.25    4.8470057 0.00061855611  0.071087337 
-    2000    5.8333333    4.8436064 0.0006181223  0.026353251 
-    2200    6.4166667    4.8444136 0.00061822531  0.050728668 
-    2400            7    4.8269238 0.00061599333  0.098640159 
-    2600    7.5833333     4.832607 0.00061671861   0.07752808 
-    2800    8.1666667    4.8312365 0.00061654371  0.024882649 
-    3000         8.75    4.8321888 0.00061666524   0.04491966 
-    3200    9.3333333    4.8184819 0.00061491602  0.091082168 
-    3400    9.9166667    4.8259594 0.00061587027  0.056698416 
-    3429     10.00125    4.8261197 0.00061589072  0.047873505 
-Loop time of 28.0272 on 32 procs for 3429 steps with 7837 atoms
+       0            0    1.2218827 0.00015593194  0.012469239 
+     200   0.58333333    1.2241807 0.00015622521  0.018911407 
+     400    1.1666667    1.2240004 0.00015620219  0.029396766 
+     600         1.75     1.224123 0.00015621784  0.032336198 
+     800    2.3333333    1.2266879 0.00015654517  0.023883276 
+    1000    2.9166667    1.2281839 0.00015673607  0.012052954 
+    1200          3.5    1.2284186 0.00015676603  0.011159475 
+    1400    4.0833333    1.2277893 0.00015668571  0.020179312 
+    1600    4.6666667    1.2258308 0.00015643579  0.028216879 
+    1800         5.25     1.226143 0.00015647562  0.024816199 
+    2000    5.8333333    1.2271352 0.00015660224  0.013456077 
+    2200    6.4166667    1.2264173 0.00015651063 0.0073352207 
+    2400            7    1.2254915 0.00015639249  0.013162601 
+    2600    7.5833333    1.2229083 0.00015606282  0.023331058 
+    2800    8.1666667    1.2214765 0.00015588011   0.02361787 
+    3000         8.75     1.221733 0.00015591283  0.013111741 
+    3200    9.3333333    1.2202503 0.00015572362  0.005268691 
+    3400    9.9166667    1.2188203 0.00015554113 0.0099230303 
+    3600         10.5    1.2159903 0.00015517997  0.020163972 
+    3800    11.083333    1.2139455 0.00015491903  0.021111585 
+    4000    11.666667    1.2135137 0.00015486393  0.010909838 
+    4200        12.25    1.2114365 0.00015459884 0.0038307868 
+    4400    12.833333    1.2097334 0.0001543815  0.009717424 
+    4600    13.416667    1.2065321 0.00015397296  0.019387132 
+    4800           14    1.2047973 0.00015375157    0.0177044 
+    5000    14.583333     1.203582 0.00015359647 0.0069624595 
+    5143    15.000417    1.2018495 0.00015337539 0.0031260256 
+Loop time of 28.2549 on 32 procs for 5143 steps with 7837 atoms
 
-Performance: 30831.083 tau/day, 122.346 timesteps/s
+Performance: 45869.426 tau/day, 182.022 timesteps/s
 99.6% CPU use with 4 MPI tasks x 8 OpenMP threads
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Pair    | 4.0198     | 4.1707     | 4.3054     |   6.1 | 14.88
-Neigh   | 0.19953    | 0.20091    | 0.20331    |   0.3 |  0.72
-Comm    | 0.42863    | 0.56532    | 0.71742    |  16.8 |  2.02
-Output  | 0.11104    | 0.11111    | 0.11131    |   0.0 |  0.40
-Modify  | 22.948     | 22.951     | 22.952     |   0.0 | 81.89
-Other   |            | 0.02848    |            |       |  0.10
+Pair    | 5.2033     | 5.4747     | 5.6701     |   7.9 | 19.38
+Neigh   | 0.16401    | 0.16569    | 0.16745    |   0.4 |  0.59
+Comm    | 0.5562     | 0.75261    | 1.0251     |  21.6 |  2.66
+Output  | 0.20095    | 0.20107    | 0.20142    |   0.0 |  0.71
+Modify  | 21.611     | 21.611     | 21.612     |   0.0 | 76.49
+Other   |            | 0.04953    |            |       |  0.18
 
-Nlocal:        1959.25 ave        1961 max        1956 min
-Histogram: 1 0 0 0 0 0 1 0 0 2
-Nghost:        576.750 ave         581 max         573 min
-Histogram: 1 0 0 1 0 1 0 0 0 1
-Neighs:        50403.8 ave       53097 max       47729 min
+Nlocal:        1959.25 ave        1965 max        1950 min
+Histogram: 1 0 0 0 0 0 1 0 1 1
+Nghost:        497.000 ave         501 max         494 min
+Histogram: 1 0 1 0 1 0 0 0 0 1
+Neighs:        41760.2 ave       43863 max       39649 min
 Histogram: 2 0 0 0 0 0 0 0 0 2
-FullNghs:     100808.0 ave      100958 max      100609 min
-Histogram: 1 0 0 0 1 0 0 1 0 1
+FullNghs:      83520.5 ave       83796 max       83201 min
+Histogram: 1 0 0 0 0 2 0 0 0 1
 
-Total # of neighbors = 403230
-Ave neighs/atom = 51.452086
-Neighbor list builds = 180
+Total # of neighbors = 334082
+Ave neighs/atom = 42.628812
+Neighbor list builds = 155
 Dangerous builds = 0
 Total wall time: 0:00:28
