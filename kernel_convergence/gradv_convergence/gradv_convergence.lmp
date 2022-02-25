@@ -50,7 +50,7 @@ displace_atoms     fluid random ${dr} ${dr} 0 ${seed} units box
 variable           rho0 equal 1.0 #Equilibrium density P=cs^2(rho-rho0)
 variable           mp equal ${rho0}/${n} #particle mass, fixed by density and number density
 variable           cs equal 4.0 #speed of sound - for pressure EoS
-variable           eta equal 0.01 #dynamic viscosity
+variable           eta equal 0.1 #dynamic viscosity
 variable           zeta equal 1 #artificial viscosity - stabilizing term
 variable           Dr equal 0.05*${h3}*${cs} #density diffusion - stabilizing term to diffuse noise throughout the system
 #variable          D equal 1.0 
@@ -76,8 +76,8 @@ velocity           all set 0.0 v_uy 0.0 units box
 ##### Define Physical Equations #######
 ################################## 
 
-fix                1 all rheo ${h3} CRK0 0 #shift # rhosum 1  shift
-fix                2 all rheo/surface ${h3}                
+fix                1 all rheo ${h3} CRK1 0 shift # rhosum 1  shift
+fix                2 all rheo/surface ${h3} 1.5 10               
 fix                3 all rheo/viscosity constant ${eta} 
 
 pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr} 
@@ -104,7 +104,7 @@ thermo_modify      norm no #report properties as extensive, not intensive (i.e. 
 
 #define a dump file
 #dump               1 all custom 200 1_2_4.atoms id type x y vx vy fx fy f_rheo_grad_gradv[*]
-dump               2 all netcdf 200 0_0_2.nc id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta f_rheo_grad_gradv[1]
+dump               2 all netcdf 200 1_1_2.nc id type x y vx vy fx fy c_den c_phase f_rheo_chi_chi c_eta f_rheo_grad_gradv[1]
 #dump_modify        1 append yes at -1 thermo yes
 
 #modify neighbor bin size based on the cutoff distance h3
