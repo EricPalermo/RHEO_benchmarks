@@ -1,0 +1,165 @@
+#################################################################################
+# RHEO demo to create single spinning solid body
+#
+#      There are two options to create the initial system
+#          a) load data_equilibrated (from the other example) and use
+#             regions + groups to create a solid body in the fluid
+#          b) use the included script change_phase.py to post process
+#             the data file before loading it into LAMMPS
+#      Both options should give the same results. After creating a solid
+#      spherical grain, it is then spun at a constant rate of rotation
+#      to induce a flow in the surrounding fluid.
+#
+#################################################################################
+
+#################################
+###  General LAMMPS settings  ###
+#################################
+
+atom_style         rheo
+dimension          3
+newton             on
+boundary           p p p
+units              lj
+comm_modify        vel yes
+
+#read_data          data_with_grain
+read_data           data_equilibrated
+
+# Create group for grain to use for further commands
+region            center sphere $(lx*0.5) $(ly*0.5) $(lz*0.5) 5.0
+group             grain region center
+
+# If we loaded data_equilibrated, set initial phase of solid region
+set               group grain phase 5
+
+# Note phase 5 is freezing, the pair style will automatically switch any particles which are phase 5 to phase 4 after creating bonds
+
+velocity          all set 0.0 0.0 0.0
+
+#################################
+###  Setting atom properties  ###
+#################################
+
+variable	       rho0 equal 1.0
+variable           n equal 1.0
+variable           mp equal ${rho0}/${n}
+
+mass               1 ${mp}
+set                group all rho ${rho0}
+set                group all temp 1.0
+
+#################################
+###   Setting interactions    ###
+#################################
+
+variable           h equal 3.0
+variable           cs equal 1.0
+variable           eta equal 0.2
+variable           zeta equal 0.1
+variable           Dr equal 0.2*${h}*${cs}
+
+# Use a hybrid pair style, overlays both the rheo pair style (fluid forces)
+# and the rheo/freeze pair style (solid forces)
+pair_style         hybrid/overlay rheo ${h} artificial/visc ${zeta} rho/damp ${Dr} rheo/freeze
+pair_coeff         * * rheo ${rho0} ${cs}
+pair_coeff         * * rheo/freeze ${h} 1.8 1.0 1.0 0.2 1.0
+
+# Solid forces are effectively harmonic springs. If two particles are within
+# the same grain, the spring (bond) has an equilbrium length equal to the initial
+# interpartice distance (zero stresses in the reference state). The spring
+# has both an attractive and repulsive component. In contrast, if two solid
+# particles are not part of the same grain (unbonded), the spring has a fixed
+# equilibirium length and only consists of a repulsive term to prevent solid bodies
+# from interpenetrating.
+#
+# The stiffness of the springs sets the effective bulk modulus B of the solid.
+# In general, B_solid >> B_fluid so it may be very computationally expensive
+# to resolve the correct bulk modulus of solid regions: we'd need a much smaller
+# timestep to resolve the speed of sound in the solid region. Therefore, I
+# generally just make sure the solid is pretty stiff so strains are pretty
+# minimal.
+#
+# In theory, you could calculate the simulated solid bulk modulus from the
+# pair-pair correlation function. Alteratively, if you can just
+# create a bulk solid body (set all particles phase to 5) and compress it to
+# measure the stress-strain curve. Not a pressing topic at first.
+#
+# The bonds can break if stretched too far (forces are interpolated to
+# zero to avoid distcontinuities), but generally we probably won't want
+# to resolve the fracture of solid bodies since this would require resolving
+# the correct bulk modulus of solids and simulating large stresses.
+# This will be a different story for membranes - like oxide skins - which
+# are presumably a lot less stiff.
+#
+# pair_coeff         * * rheo/freeze ${h} 1.8 1.0 1.0 0.2 1.0
+# The arguments for rheo/freeze are:
+#    1) Maximum cutoff of interaction. Theoretically it should be
+#       (max bond length)*(max stetch) but making it the same cutoff
+#       as the rheo pairstyle means only one neighbor list will be built
+#    2) Maximum length a bond can reach - LAMMPS will only bond particles
+#       if they are within a distance of 1.8
+#    3) The stiffness k of a bond. I had calculated the bulk modulus in the past,
+#       but don't know it exactly for this system. It's probably approximately
+#       1.0*k. In comparison, the bulk modulus of the fluid is ${cs)^2*${rho0} = 1.
+#       So these bonds may be a little weak since the solid should be stiffer than
+#       the fluid. I don't know how large of an effect this will have on errors
+#       however, this still needs testing.
+#    4) The interaction distance of non-bonded particles, this should be about
+#       comparable to the average interparticle distance
+#    5) The maximum strain between two particles before a bond will break.
+#       Not relevant for this example.
+#    6) In addition to the spring forces, particles will damp out normal velocity
+#       differences while interacting (this is like DPD). This last parameter is
+#       the strength of this damping.
+
+
+#################################
+###    Simulation settings    ###
+#################################
+
+# Use peratom variables to calculate relevant quantities to set rotation
+variable           delx atom x-lx*0.5
+variable           dely atom y-ly*0.5
+variable           r atom (v_delx^2+v_dely^2)^0.5
+variable           vrotx atom -0.002*v_dely # w x r
+variable           vroty atom  0.002*v_delx
+
+fix               1 all rheo ${h} Quintic 5 shift
+fix               2 all rheo/viscosity constant ${eta}
+
+# Set all forces on the grain to zero and simply move particles
+# in the grain at a constant rotational velocity so it spins
+# indefinitely
+fix               3 grain setforce 0.0 0.0 0.0
+fix               4 grain move variable NULL NULL NULL v_vrotx v_vroty NULL
+
+# Now that there are solid forces, the timestep not only needs to respect
+# the CFL criteria for fluids, it also needs to be small enough to resolve
+# solid forces. A rule of thumb in MD is that the timestep is at least 5%
+# of the smallest timescale in the system. A spring with stiffness 1.0
+# has a period of 2*pi*sqrt(m/k) ~ 6 so the timestep should be at least < 0.3.
+# I just used 0.1 to be safe. This could be optimized.
+
+timestep          0.1
+
+#################################
+###   Output data & run       ###
+#################################
+
+thermo             100
+thermo_style       custom step dt time ke pe press
+
+# dump the phase and number of bonds so its easier to track the grain
+# and confirm whether any bonds break. Also calculate angular velocity
+# of each particle (relative to grain center) for easy analysis
+
+compute            phase all property/atom phase
+compute            nbond all property/atom i_rheo_freeze_nbond
+compute            rho all property/atom rho
+variable           omega atom (v_delx*vy-v_dely*vx)/v_r^2
+
+dump               dump_id all custom 500 ./spinning_grain_dump_nopreprocess/dump.* id x y z c_phase c_nbond c_rho v_omega
+
+
+run              50000

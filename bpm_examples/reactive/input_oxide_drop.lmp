@@ -1,0 +1,121 @@
+#################################################################################
+# RHEO demo to create an oxidizing droplet
+#
+#      Using the previously created data file, the input script creates a sphere
+#      over a flat wall. The sphere is then given a velocity and impacts the wall.
+#      Surface atoms on the sphere oxidize over time, creating an elastic shell.
+#      Varying the properties of the oxide interaction (stiffness, fracture strain),
+#      you can see a wide variety of phenomenologies.
+#
+#################################################################################
+
+
+
+#################################
+###  General LAMMPS settings  ###
+#################################
+
+atom_style         rheo
+dimension          3
+boundary           f f f               #To start i'm using fixed boundaries
+                                       #to avoid issues with deleting atoms
+units              lj
+comm_modify        vel yes
+
+#################################
+###   Loading data files      ###
+#################################
+
+read_data          ../fluid/data_equilibrated   #using data file from other script
+
+# First create the droplet
+region             1 sphere $(lx/2) $(ly/2) $(lz/2) $(lx/2-5) side out
+delete_atoms       region 1
+
+# Then reread file and shift it downwards to create wall
+read_data          ../data_equilibrated add append group base shift 0.0 0.0 -50 #-35
+region             delete block EDGE EDGE EDGE EDGE EDGE -5 units box
+delete_atoms       region delete
+
+change_box         all boundary s s s  # Here I'm using non-periodic boundaries
+                                       # s = shrink wrapped (smallest size that fits atoms)
+                                       # m = shrink wrapped but not less than the current size
+
+#################################
+###  Setting atom properties  ###
+#################################
+
+variable	       rho0 equal 1.0
+variable           n equal 1.0
+variable           mp equal ${rho0}/${n}
+mass               1 ${mp}
+
+variable           h equal 3.0
+variable           cs equal 1.0
+variable           zeta equal 1.0
+
+variable           eta equal 0.1
+variable           D equal 1.0
+variable	       kappa equal ${D}*${rho0}/${mp}
+variable           Dr equal 0.2*${h}*${cs}
+set                group all rho ${rho0}
+set                group base phase 4
+
+# Set initial velocity of droplet and wall
+velocity           all set 0.0 0.0 -0.1 units box
+velocity           base set 0.0 0.0 0.0  units box
+
+#################################
+###   Setting interactions    ###
+#################################
+
+pair_style         hybrid/overlay rheo ${h} artificial/visc ${zeta} rho/damp ${Dr} rheo/react
+
+pair_coeff         * * rheo ${rho0} ${cs}
+pair_coeff         * * rheo/react ${h} 1.5 1.0 0.05 1.0 1 2.0 0.75 2.0
+
+# Here the main difference from the water balloon example is that
+# the critical strain is much lower so bonds can break
+
+#################################
+###   Setting fixes           ###
+#################################
+
+fix               1 all rheo ${h} Quintic 5 shift
+fix               2 all rheo/viscosity constant ${eta}
+fix               3 base setforce 0.0 0.0 0.0    # Ensure no forces are applied to the wall
+                                                 # such that it never moves
+fix               4 all rheo/surface ${h} 2.5 20
+fix               5 all balance 1000 1.05 shift x 10 1.05
+
+timestep 0.02 #Smaller timestep to resolve large elastic forces in shell
+
+
+#################################
+###   Output data & run       ###
+#################################
+
+thermo             100
+thermo_style       custom step dt time ke pe press
+
+compute            phase all property/atom phase
+compute            nbond all property/atom i_rheo_react_nbond
+compute            rho all property/atom rho
+compute            surf all property/atom surface
+compute            coord all property/atom i_coordination
+compute            divr all property/atom d_divr
+compute            rsurf all property/atom d_rsurf
+
+dump               dump_id all custom 1000 ./oxide_drop_dump/dump.* id x y z c_phase c_nbond c_rho c_surf c_coord c_divr fx fy fz c_rsurf
+
+# First we run for a short period of time with a small time to form bonds
+# to rapdily create the initial shell (so the simulation can be run faster)
+run   100
+
+# Then we increase the bond formation time to the desired duration and
+# let the droplet fall and impact
+# You can tweak the critical strain, time to reform, stiffness, and thickness
+# of the membrane to alter the resulting splat
+pair_coeff         * * rheo/react ${h} 1.5 1.0 0.05 1.0 500 2.0 0.75 2.0
+
+run   500000

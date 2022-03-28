@@ -1,0 +1,159 @@
+LAMMPS (29 Oct 2020)
+  using 8 OpenMP thread(s) per MPI task
+dimension          2
+units              lj
+atom_style         rheo
+boundary           p p p
+comm_modify        vel yes
+newton off
+
+##### Particle Generation #######
+##################################
+
+## Particle Lattice/Resolution Parameters
+variable           L equal 10
+variable           t_tot equal 100
+variable           sf equal 0.1 #25 #/${L} #scaling of unit cell #scale factor for particle resolution
+# n is particle number density, depends on lattice
+variable           nb equal 1    #number of basis atoms depends on lattice
+variable           n equal ${nb}/(${sf}^2) # number of particles per volume
+variable           n equal 1/(${sf}^2) 
+variable           n equal 1/(0.1^2) 
+variable           del equal ${sf}#*sqrt(2) # distance between particles
+variable           del equal 0.1
+lattice            sq ${n} #create a set of potential particle locations
+lattice            sq 100 
+Lattice spacing in x,y,z = 0.1 0.1 0.1
+
+# SPH Smoothing Kernel Length
+variable           hd equal 3.5
+variable           h3 equal ${hd}*${del}
+variable           h3 equal 3.5*${del}
+variable           h3 equal 3.5*0.1
+
+variable           dz equal 0.1*${sf} #For 2D, make sure that z-dimension only has 1 particle layer
+variable           dz equal 0.1*0.1 
+region             box block 0 ${L} 0 ${L} -${dz} ${dz} units box #create a 2D box using box units (vs lattice units)
+region             box block 0 10 0 ${L} -${dz} ${dz} units box 
+region             box block 0 10 0 10 -${dz} ${dz} units box 
+region             box block 0 10 0 10 -0.01 ${dz} units box 
+region             box block 0 10 0 10 -0.01 0.01 units box 
+create_box         2 box #create a simulation box from the region box - with 2 types of atoms
+Created orthogonal box = (0.0000000 0.0000000 -0.01) to (10.000000 10.000000 0.01)
+  2 by 2 by 1 MPI processor grid
+#Create atoms in our whole simulation box
+create_atoms       1 region box #creates atoms of type 1 within the box region
+Created 10000 atoms
+  create_atoms CPU = 0.001 seconds
+
+
+
+# Assign all particles of type 1 to a group fluid
+group              fluid type 1
+10000 atoms in group fluid
+#group             wall type 2
+
+##### End Particle Generation #######
+##################################
+
+#Now randomly displace in x and y up %20 of their spacing (sf)
+variable           seed equal 135414
+variable           dr equal 0.1*${del}
+variable           dr equal 0.1*0.1
+displace_atoms     fluid random ${dr} ${dr} 0 ${seed} units box
+displace_atoms     fluid random 0.01 ${dr} 0 ${seed} units box
+displace_atoms     fluid random 0.01 0.01 0 ${seed} units box
+displace_atoms     fluid random 0.01 0.01 0 135414 units box
+Displacing atoms ...
+
+##### Setting Physical Parameters #######
+##################################
+
+# Potential parameters eta = 1, cs = 0 so force gives laplacian
+variable           rho0 equal 1.0 #Equilibrium density P=cs^2(rho-rho0)
+variable           mp equal ${rho0}/${n} #particle mass, fixed by density and number density
+variable           mp equal 1/${n} 
+variable           mp equal 1/100 
+variable           cs equal 1.0 #speed of sound - for pressure EoS
+variable           eta equal 0.01 #dynamic viscosity
+variable           zeta equal 1 #artificial viscosity - stabilizing term
+variable           Dr equal 0.005*${h3}*${cs} #density diffusion - stabilizing term to diffuse noise throughout the system
+variable           Dr equal 0.005*0.35*${cs} 
+variable           Dr equal 0.005*0.35*1 
+#variable          D equal 1.0
+#variable          kappa equal ${D}*${rho0}/${mp}
+#variable          fext equal 5e-3/${n}
+
+
+# Set particle properties
+mass               * ${mp}
+mass               * 0.01
+set                group all phase 0
+Setting atom values ...
+  10000 settings made for phase
+set                group all temp 1.0
+Setting atom values ...
+  10000 settings made for temp
+
+variable           u0 equal 0.05
+
+variable           uy atom  ${u0}*sin(2*PI*x/lx)*cos(2*PI*y/ly)
+variable           uy atom  0.05*sin(2*PI*x/lx)*cos(2*PI*y/ly)
+variable           ux atom -${u0}*sin(2*PI*y/ly)*cos(2*PI*x/ly)
+variable           ux atom -0.05*sin(2*PI*y/ly)*cos(2*PI*x/ly)
+variable           d0 atom ${rho0}-${u0}*${u0}*${rho0}*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
+variable           d0 atom 1-${u0}*${u0}*${rho0}*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
+variable           d0 atom 1-0.05*${u0}*${rho0}*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
+variable           d0 atom 1-0.05*0.05*${rho0}*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
+variable           d0 atom 1-0.05*0.05*1*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/${cs}/${cs}
+variable           d0 atom 1-0.05*0.05*1*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/1/${cs}
+variable           d0 atom 1-0.05*0.05*1*0.25*(cos(4*PI*x/lx)+cos(4*PI*y/ly))/1/1
+
+velocity           all set v_ux v_uy 0.0 units box
+set                group all rho v_d0
+Setting atom values ...
+  10000 settings made for rho
+
+
+##### Define Physical Equations #######
+##################################
+
+fix                1 all rheo ${h3} CRK2 0 shift # rhosum 1  shift
+fix                1 all rheo 0.35 CRK2 0 shift 
+#fix                2 all rheo/surface ${h3} 1.5 10
+fix                3 all rheo/viscosity constant ${eta}
+fix                3 all rheo/viscosity constant 0.01
+
+pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr}
+pair_style         rheo 0.35 artificial/visc ${zeta} rho/damp ${Dr}  
+pair_style         rheo 0.35 artificial/visc 1 rho/damp ${Dr}  
+pair_style         rheo 0.35 artificial/visc 1 rho/damp 0.00175  
+pair_coeff         * * ${rho0} ${cs}
+pair_coeff         * * 1 ${cs}
+pair_coeff         * * 1 1
+
+#Timestep
+#Ensures that the timestep is smaller than values, as per CFL criteria
+#Calculate min acceleration at each timestep (for dt_3)
+variable           dt_max equal  0.1*${h3}/${cs}/3
+variable           dt_max equal  0.1*0.35/${cs}/3
+variable           dt_max equal  0.1*0.35/1/3
+variable           force_mag atom sqrt(fx^2+fy^2) #vector of force magnitudes
+variable           accel_mag atom v_force_mag/${mp}
+variable           accel_mag atom v_force_mag/0.01
+compute            accel_min fluid reduce sum v_accel_mag
+#Timestep constraints
+variable           dt_1 equal 0.25*${h3}/${cs}
+variable           dt_1 equal 0.25*0.35/${cs}
+variable           dt_1 equal 0.25*0.35/1
+variable           dt_2 equal 0.125*${h3}*${h3}*${rho0}/${eta} #Viscous criterion
+variable           dt_2 equal 0.125*0.35*${h3}*${rho0}/${eta} 
+variable           dt_2 equal 0.125*0.35*0.35*${rho0}/${eta} 
+variable           dt_2 equal 0.125*0.35*0.35*1/${eta} 
+variable           dt_2 equal 0.125*0.35*0.35*1/0.01 
+variable           dt_3 equal 0.25*sqrt(${h3}/c_accel_min})
+variable           dt_3 equal 0.25*sqrt(0.35/c_accel_min})
+# Logic to evaluate max timestep constraint
+if "(${dt_1} <= ${dt_2}) && (${dt_1} <= ${dt_3})" then     "variable dt_max equal v_dt_1" elif "(${dt_2} <= ${dt_1}) && (${dt_2} <= ${dt_3})"     "variable dt_max equal ${dt_2}"
+ERROR: Variable dt_3: Compute used in variable between runs is not current (src/variable.cpp:1381)
+Last command: (${dt_1

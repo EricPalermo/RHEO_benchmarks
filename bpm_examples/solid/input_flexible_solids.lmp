@@ -1,0 +1,102 @@
+#################################################################################
+# RHEO demo to create a flexible plane and pillar in fluid flow
+#
+#      After initalizing the geometry, a local force is applied to particles
+#      Both the plane and the pillar are flexible and move as the fluid flows
+#      The plane is much weaker and is able to rip
+#      Meant to represent solids with moduli comparable to the fluid modulus
+#
+#################################################################################
+
+#################################
+###  General LAMMPS settings  ###
+#################################
+
+atom_style         rheo
+dimension          3
+newton             on
+boundary           p p p
+units              lj
+comm_modify        vel yes
+
+read_data         ./../fluid/data_equilibrated   extra/atom/types 1
+
+region            floor block EDGE EDGE EDGE EDGE EDGE $(zlo+3.0)
+region            roof  block EDGE EDGE EDGE EDGE $(zhi-3.0) EDGE
+region            walls union 2 floor roof
+region            pillar block $(lx*0.75) $(lx*0.75+5) $(ly*0.5-2.5) $(ly*0.5+2.5) $(zlo+3.0) $(lz*0.7)
+region            plane block $(lx*0.25) $(lx*0.25+3.0) EDGE EDGE $(zlo+3.0) $(zhi-3.0)
+region            pore  cylinder x $(ly/2.0) $(lz/2.0) 6.0 EDGE EDGE
+
+group             walls region walls
+group             pillar region pillar
+group             plane region plane
+group             pore region pore
+group             vent subtract plane pore
+
+set               group walls phase 4
+set               group pillar phase 5
+set               group vent phase 5
+
+set               group vent type 2
+
+group             solids union walls pillar vent
+group             fluids subtract all solids
+
+#################################
+###  Setting atom properties  ###
+#################################
+
+variable	       rho0 equal 1.0
+variable           n equal 1.0
+variable           mp equal ${rho0}/${n}
+
+mass               1 ${mp}
+mass               2 ${mp}
+set                group all rho ${rho0}
+set                group all temp 1.0
+
+velocity           all set 0.0 0.0 0.0
+
+#################################
+###   Setting interactions    ###
+#################################
+
+variable           h equal 3.0
+variable           cs equal 1.0
+variable           eta equal 0.2
+variable           zeta equal 0.1
+variable           Dr equal 0.2*${h}*${cs}
+
+pair_style         hybrid/overlay rheo ${h} artificial/visc ${zeta} rho/damp ${Dr} rheo/freeze
+pair_coeff         * * rheo ${rho0} ${cs}
+pair_coeff         * * rheo/freeze ${h} 1.5 1.0 1.0 1.0 1.0
+pair_coeff         2 2 rheo/freeze ${h} 1.5 0.1 1.0 1.0 1.0 #Interaction between plane atoms is weaker so it can rip 
+
+#################################
+###    Simulation settings    ###
+#################################
+
+variable          force atom 0.00004*exp(-(x-10.0)*(x-10.0)/50) #roughly locally applied force, smoothed
+
+fix               1 all rheo ${h} Quintic 5 shift
+fix               2 all rheo/viscosity constant ${eta}
+fix               3 fluids addforce v_force 0.0 0.0
+fix               4 walls setforce 0.0 0.0 0.0
+timestep          0.01
+
+#################################
+###   Output data & run       ###
+#################################
+
+thermo             100
+thermo_style       custom step dt time ke pe press
+
+compute            phase all property/atom phase
+compute            nbond all property/atom i_rheo_freeze_nbond
+compute            rho all property/atom rho
+
+dump               dump_id all custom 2000 ./flexible_solids_dump/dump.* id type x y z c_phase c_nbond c_rho vx vy vz v_force
+
+run              2500000
+

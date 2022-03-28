@@ -1,0 +1,163 @@
+#################################################################################
+# RHEO demo to create a simple cubic fluid with disordered particle positions
+#
+#      It places atoms on an FCC lattice, assigns random velocities,
+#      then lets them scramble. Viscosity slowly damps out their motion.
+#      Rheo will work with an ordered or disordered distribution of particles,
+#      but since fluids/grains are typically isotropic there are some reasons
+#      you may want to start with a disordered packing - to avoid potential
+#      aliasing effects - but we haven't really tested whether that's true
+#
+#################################################################################
+
+#################################
+###  General LAMMPS settings  ###
+#################################
+
+atom_style         rheo
+dimension          3
+newton             on
+boundary           p p p
+units              lj
+comm_modify        vel yes   # Rheo requires all "ghost" atoms have velocities so it can calculate viscosities
+
+#################################
+###   Defining initial box    ###
+#################################
+
+variable	       rho0 equal 1.0  # this is the equilibrium density of the fluid
+variable           n equal 1.0     # this is the equilibrium number density of particles
+variable           mp equal ${rho0}/${n}   # this is the resulting mass per particle
+
+variable           Lx equal $(20*(4.0/v_n)^(1.0/3.0)) # Defining size of the box
+variable           Ly equal $(20*(4.0/v_n)^(1.0/3.0)) # It's 20^3 lattice unit cells
+variable           Lz equal $(20*(4.0/v_n)^(1.0/3.0)) # The 4/v_n^(1/3) is the cell length for FCC (I think)
+
+# for different demos I modified these values
+
+lattice            fcc ${n}
+region             box block 0 $(v_Lx) 0 $(v_Ly) 0 $(v_Lz) units box
+create_box         1 box
+create_atoms       1 region box    # These are standard LAMMPS commands to create a simulation box and add atoms
+
+#################################
+###  Setting atom properties  ###
+#################################
+
+mass               1 ${mp}               # This is setting the mass, density, phase, and temp of each particle
+set                group all rho ${rho0}
+set                group all phase 0     # phase 0 => fluid, other phases are 3 (reactive), 4 (solid), 5 (freezing)
+set                group all temp 1.0    # temperature is irrelevant for this simulation, so it's arbitrary
+
+# Brief aside on phases
+# 3 = Reactive: this is used to represent systems which can dynamically transition between solid/fluid with time/strain
+#               e.g. oxidation, surface atoms can chemically react with oxygen creating a breakable oxide shell
+#               Particles are reactive if they contain some of these dynamic bonds, otherwise they are just fluid
+#
+# 4 = Solid:    self-explanitory, used more for systems that are persistently solid (e.g. grain or ice). Note that
+#               solid particles are bonded together to create larger solid bodies but in theory you could have just
+#               one single solid particle.
+#
+# 5 = Freezing: this designates that a particle is becoming solid. This is very important, while it is freezing,
+#               the particle will search for all neighbor solid/freezing/reactive particles and form bonds with them
+#               to create larger, solid bodies. Therefore, this phase is often used at the beginning of a simulation
+#               to designate which areas should become solid grains of many bonded solid particles. After 1 timestep,
+#               all freezing particles will automatically become solid (phase 4) particles
+
+velocity           all create 0.005 523425234   # apply a random velocity to all particles to scramble
+
+#################################
+###   Setting interactions    ###
+#################################
+
+variable           h equal 3.0                # This is the kernel cutoff length
+variable           cs equal 1.0               # The speed of sound
+variable           eta equal 0.1              # The viscosity
+variable           zeta equal 0.1             # The 'artificial' viscosity (discussed below)
+variable           Dr equal 0.2*${h}*${cs}    # The density damping (discussed below)
+
+pair_style         rheo ${h} artificial/visc ${zeta} rho/damp ${Dr}
+pair_coeff         * * ${rho0} ${cs}
+
+# The rheo pairstyle is used to model fluid-fluid interactions (most of what Rheo is)
+# It always accepts ${h} as its first argument but then has several optional settings
+# The first, artificial viscosity, turns on an extra damping term which targets longitudinal waves
+#            Ideally, we'd like to solve the incompressible NS equation, but in practice we actually
+#            model a weakly-compressible fluid which is numerically easier
+#            Since the fluid is nearly-incompressible, you can generate longitudinal waves or other
+#            sub-kernel-resolution oscillations. These aphysical oscillations are often damped out
+#            in SPH using an 'artificial visocosity'. We use a formulation from Frontiere 2017 (CRKSPH)
+#
+# The second, rho/damp, is a similar add-on which is used to remove sub-kernel-resolution fluctuations
+#            in particle densities. I can't recall what paper the formulation was from (or if we made it
+#            up), but it will simply smooth rapid changes in density which also helps stabilize simulations
+#
+# For both these options, I haven't fully tested what's an ideal value. A starting point is just to copy these
+# values or just turn them off (delete them or use a coefficient of 0.0)
+#
+# Other settings also exist to allow simulation of thermal diffusion, thermal expansion, different pressure
+# equations of state (by default it's a linear Pressure ~ rho-rho0), etc. These may  no longer have an effect
+
+
+# The rheo pair style then requires 2 coefficients, the default density and the speed of sound
+
+#################################
+###   Setting fixes           ###
+#################################
+
+variable           dt_max equal 0.1*${h}/${cs}/3          # I think these are CFL criteria or
+variable           dx_max equal ${h}/100                  # standard limits on fluid simulations for
+                                                          # maximum timestep sizes and particle displacements
+
+fix                1 all rheo ${h} Quintic 5 shift        # This is the integrator for RHEO arguments are:
+# 1) kernel length - same as pair rheo
+# 2) The type of kernel, this is a standard quintic kernel (no reproducing kernels)
+# https://www.researchgate.net/figure/Quintic-Spline-Kernel-Function-and-its-first-derivative_fig1_229757623
+#    Other options are CRK1 (1st order reproducing) and CRK2 (2nd order). Going up in order increases computational
+#    costs but improves accuracy. For testing, a low-order accuracy is probably easiest
+# 3) A threshold on how many neighbors a particle needs within their kernel support to calculate reproducing kernels
+#    e.g. if a particle has <5 neighbors, you can't really calculate accurate moments so LAMMPS will revert to
+#    a 0th order (quintic) kernel. Only really relevant at free surface boundaries (splashes)
+# 4) shift - turns on particle shifting. This is a common technique in SPH where if the spacing of particles starts
+#    to get messy (e.g. particles overlap or leave a gap in the fluid) it shifts particle positions without
+#    affecting the fluid dynamics solver to create a more homogeneous particle distribution.
+#    It might be this method: https://www.sciencedirect.com/science/article/pii/S0045782519300702
+#    Like the artificial viscosity/rho damp, this isn't strictly necessary and you can always try turning it off
+#    at the potential cost of less stability (may or may not be an issue)
+#
+# Other options also exist such as "thermal" (integrates heat flow) and "rhosum" (uses a kernel sum to calculate
+# particle densities instead of evolving density flow) which aren't relevant here
+
+fix                2 all rheo/viscosity constant ${eta}
+# This fix specifies how viscosity of particles is set. Currently a "constant" viscosity is applied to all particles
+# with a magnitude $eta. I'm blanking on whether this is a dynamic or kinematic viscosity. But for rho0 = 1 I guess
+# they are teh same?
+#
+# Other options include things like 'power' (power-law shear thinning/thickening), 'bingham' (w/ a yield stress),
+# 'aluminium' (a thermal-based viscosity matched to experimental data for aluminum) - some of these are still
+# in development or are untested
+
+fix                4 all dt/reset 1 NULL ${dt_max} ${dx_max} units box
+# This is a standard LAMMPS fix which sets a variable timestep - see documentation
+
+timestep           ${dt_max}
+
+#################################
+###   Output data & run       ###
+#################################
+
+compute            rho_peratom all property/atom rho    # This is a method in LAMMPS to get custom user-defined variables
+                                                        # e.g. the density 'rho' of a particle for RHEO
+compute            rho_ave all reduce ave c_rho_peratom
+
+thermo             1000
+thermo_style       custom step dt time ke pe press vol c_rho_ave
+# here the average density is printed - want to make sure it's stable during a simulation run
+
+dump               dump_id all custom 200 ./dump/dump.* id x y z c_rho_peratom
+dump_modify        dump_id sort id
+#dump                1 all netcdf 1000 test.nc id type x y vx vy fx fy c_rho_peratom
+
+run                20000
+
+write_data         data_equilibrated nofix

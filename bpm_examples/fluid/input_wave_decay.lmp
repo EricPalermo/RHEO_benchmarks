@@ -1,0 +1,96 @@
+#################################################################################
+# RHEO demo to create a decaying transverse wave
+#
+#      It initially places a lattice of atoms (could replace with read_data
+#      command) and creates a transverse wave by setting atom velocities. The
+#      wave then decays due to viscosity. Decay rate should be very accurate
+#      for CRK but only okay for quintic.
+#
+#################################################################################
+
+#################################
+###  General LAMMPS settings  ###
+#################################
+
+atom_style         rheo
+dimension          3
+newton             on
+boundary           p p p
+units              lj
+comm_modify        vel yes
+#read_data         data_equilibrated
+# could use this instead to start w/ a disordered particle arrangement
+
+#################################
+###   Defining initial box    ###
+#################################
+
+variable	       rho0 equal 1.0
+variable           n equal 1.0
+variable           mp equal ${rho0}/${n}
+
+variable           Lx equal $(20*(4.0/v_n)^(1.0/3.0))
+variable           Ly equal $(10*(4.0/v_n)^(1.0/3.0))
+variable           Lz equal $(10*(4.0/v_n)^(1.0/3.0))
+
+lattice            fcc ${n}
+region             box block 0 $(v_Lx) 0 $(v_Ly) 0 $(v_Lz) units box
+create_box         1 box
+create_atoms       1 region box
+
+#################################
+###  Setting atom properties  ###
+#################################
+
+mass               1 ${mp}
+set                group all rho ${rho0}
+set                group all phase 0
+set                group all temp 1.0
+
+variable           vprof atom 0.01*sin(x*2*PI/lx)
+velocity           all set 0.0 v_vprof 0.0 units box # Transverse wave
+
+#################################
+###   Setting interactions    ###
+#################################
+
+variable           h equal 3.0                # This is the kernel cutoff length
+variable           cs equal 1.0               # The speed of sound
+variable           eta equal 0.2              # The viscosity
+variable           zeta equal 0.1             # The 'artificial' viscosity
+variable           Dr equal 0.2*${h}*${cs}    # The density damping
+
+pair_style         rheo ${h} artificial/visc ${zeta} rho/damp ${Dr}
+pair_coeff         * * ${rho0} ${cs}
+
+
+#################################
+###   Setting fixes           ###
+#################################
+
+#start with CRK1, can switch to Quintic or CRK2 to test effect/convergence
+fix               1 all rheo ${h} CRK1 5 shift
+fix               2 all rheo/viscosity constant ${eta}
+
+#################################
+###   Output data & run       ###
+#################################
+
+compute            rho_peratom all property/atom rho
+variable           drho atom c_rho_peratom-${rho0}
+compute            drho_ave all reduce ave v_drho
+
+#bin and print velocities to look at spatial evolution of velocity
+compute            xbin all chunk/atom bin/1d x center 0.5
+fix                vbin all ave/chunk 5000 1 5000 xbin vx vy file vprofile.dat
+
+compute            vmax all reduce max vy      #Calculate min/max velocity
+compute            vmin all reduce min vy      #to easily track wave decay
+
+thermo             100
+thermo_style       custom step dt time ke pe press #vol c_vmax c_vmin c_drho_ave
+
+dump               dump_id all custom 1000 ./wave_decay_dump_current/dump.* id x y z vx vy vz c_rho_peratom
+
+
+run              30000

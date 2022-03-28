@@ -1,0 +1,216 @@
+LAMMPS (29 Oct 2020)
+  using 8 OpenMP thread(s) per MPI task
+dimension          2
+units              lj
+atom_style         rheo
+boundary           p f p
+comm_modify        vel yes
+newton off
+
+## Particle Lattice/Resolution Parameters
+variable           L equal 10
+variable           t_tot equal 3400
+variable           sf equal 0.2 #/${L} #scaling of unit cell
+variable           nb equal 1    #number of basis atoms depends on lattice
+variable           n equal ${nb}/(${sf}^2)
+variable           n equal 1/(${sf}^2)
+variable           n equal 1/(0.2^2)
+variable           del equal ${sf}#*sqrt(2)
+variable           del equal 0.2
+variable           hd equal 3.5
+variable           h3 equal ${hd}*${del}
+variable           h3 equal 3.5*${del}
+variable           h3 equal 3.5*0.2
+variable           dz equal 0.1*${sf}
+variable           dz equal 0.1*0.2
+
+# create simulation box
+
+# read_restart       restart_adj_param.857143
+###########################
+### COMMENT FOR RESTART ###
+region             box block 0 20 -10 10 -${dz} ${dz} units box
+region             box block 0 20 -10 10 -0.02 ${dz} units box
+region             box block 0 20 -10 10 -0.02 0.02 units box
+create_box         2 box
+Created orthogonal box = (0.0000000 -10.000000 -0.02) to (20.000000 10.000000 0.02)
+  2 by 2 by 1 MPI processor grid
+lattice            sq ${n}
+lattice            sq 25
+Lattice spacing in x,y,z = 0.2 0.2 0.2
+
+#region             block cylinder z 10 -4.8 4 -${dz} ${dz} units b
+region             topwall block INF INF  7 10 -${dz} ${dz} units box
+region             topwall block INF INF  7 10 -0.02 ${dz} units box
+region             topwall block INF INF  7 10 -0.02 0.02 units box
+region             block   block INF INF -6.99 6.99 -${dz} ${dz} units box
+region             block   block INF INF -6.99 6.99 -0.02 ${dz} units box
+region             block   block INF INF -6.99 6.99 -0.02 0.02 units box
+region             botwall block INF INF -10 -7 -${dz} ${dz} units box
+region             botwall block INF INF -10 -7 -0.02 ${dz} units box
+region             botwall block INF INF -10 -7 -0.02 0.02 units box
+
+create_atoms       2 region topwall
+Created 1500 atoms
+  create_atoms CPU = 0.001 seconds
+create_atoms       2 region botwall
+Created 1600 atoms
+  create_atoms CPU = 0.000 seconds
+create_atoms       1 region block
+Created 6900 atoms
+  create_atoms CPU = 0.000 seconds
+
+group              fluid type 1
+6900 atoms in group fluid
+group              rig type 2
+3100 atoms in group rig
+
+#Now randomly displace in x and y up %20 of their spacing (sf)
+variable           seed equal 135414
+variable           dr equal 0.1*${del}
+variable           dr equal 0.1*0.2
+displace_atoms     fluid random ${dr} ${dr} 0 ${seed} units box
+displace_atoms     fluid random 0.02 ${dr} 0 ${seed} units box
+displace_atoms     fluid random 0.02 0.02 0 ${seed} units box
+displace_atoms     fluid random 0.02 0.02 0 135414 units box
+Displacing atoms ...
+### COMMENT FOR RESTART ###
+###########################
+
+# Potential parameters eta = 1, cs = 0 so force gives laplacian
+variable           rho0 equal 1.0
+variable           mp equal ${rho0}/${n}
+variable           mp equal 1/${n}
+variable           mp equal 1/25
+variable           cs equal 1
+variable           zeta equal 1
+variable           D equal 1.0
+variable	       kappa equal ${D}*${rho0}/${mp}
+variable	       kappa equal 1*${rho0}/${mp}
+variable	       kappa equal 1*1/${mp}
+variable	       kappa equal 1*1/0.04
+variable           fext equal 1e-5/${n}
+variable           fext equal 1e-5/25
+#Viscosity parameters
+variable           eta equal 0.01 #1 becomes fully developed faster than 0.1; gives better profile
+#(for a Herschel-Bulkley fluid - special case: power law)
+variable           gd0 equal 1e-2
+variable           npow equal 0.5
+variable           K equal ${eta}*${gd0}^(1-${npow})
+variable           K equal 0.01*${gd0}^(1-${npow})
+variable           K equal 0.01*0.01^(1-${npow})
+variable           K equal 0.01*0.01^(1-0.5)
+
+
+# Set particle properties
+mass               1 ${mp}
+mass               1 0.04
+mass               2 ${mp}
+mass               2 0.04
+set                group all rho ${rho0}
+set                group all rho 1
+Setting atom values ...
+  10000 settings made for rho
+set                group all phase 0
+Setting atom values ...
+  10000 settings made for phase
+set                group rig phase 4
+Setting atom values ...
+  3100 settings made for phase
+set                group all temp 1.0
+Setting atom values ...
+  10000 settings made for temp
+
+#velocity           fluid set 0.0 -1 0.0 units box
+
+
+#Integration and Kernel
+fix                1 all rheo ${h3} CRK1 0 shift # rhosum 1
+fix                1 all rheo 0.7 CRK1 0 shift 
+fix                2 all rheo/viscosity constant ${eta}
+fix                2 all rheo/viscosity constant 0.01
+#fix                3 all rheo/surface ${h3} 1.5 10
+
+fix                4 rig setforce 0.0 0.0 0.0
+fix                5 fluid addforce ${fext} 0.0 0.0
+fix                5 fluid addforce 4e-07 0.0 0.0
+
+variable           Dr equal 0.05*${h3}*${cs}
+variable           Dr equal 0.05*0.7*${cs}
+variable           Dr equal 0.05*0.7*1
+pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr}
+pair_style         rheo 0.7 artificial/visc ${zeta} rho/damp ${Dr}  
+pair_style         rheo 0.7 artificial/visc 1 rho/damp ${Dr}  
+pair_style         rheo 0.7 artificial/visc 1 rho/damp 0.035  
+pair_coeff         * * ${rho0} ${cs}
+pair_coeff         * * 1 ${cs}
+pair_coeff         * * 1 1
+
+#Timestep
+variable           dt_max equal  0.1*${h3}/${cs}/3
+variable           dt_max equal  0.1*0.7/${cs}/3
+variable           dt_max equal  0.1*0.7/1/3
+#variable           dt_max equal 0.125*${h3}*${h3}/${eta}/9 #Viscous criterion
+#variable           dt_max equal 0.1*${sf}/.01
+#variable           dx_max equal ${h3}/100
+timestep           ${dt_max}
+timestep           0.0233333333333333
+#fix                dtr all dt/reset 1 NULL ${dt_max} ${dx_max}  units box
+variable           Nsteps equal round(${t_tot}/${dt_max})
+variable           Nsteps equal round(3400/${dt_max})
+variable           Nsteps equal round(3400/0.0233333333333333)
+
+compute            den all property/atom rho
+compute            phase all property/atom phase
+compute            eta all property/atom viscosity
+
+thermo             200
+thermo_style       custom step time etotal temp press
+
+thermo_modify      norm no
+dump               1 all custom 500 ncdf/0_1_5_3p5_p01_1e-5.atoms id type x y vx vy fx fy c_den c_phase c_eta #f_rheo_chi_chi
+dump               2 all netcdf 500 ncdf/0_1_5_3p5_p01_1e-5.nc id type x y z vx vy vz fx fy c_den c_phase c_eta #f_rheo_chi_chi
+variable           skin equal 0.2*${h3}
+variable           skin equal 0.2*0.7
+neighbor           ${skin} bin
+neighbor           0.14 bin
+neigh_modify       one 5000
+run                ${Nsteps}
+run                145714
+Neighbor list info ...
+  update every 1 steps, delay 10 steps, check yes
+  max neighbors/atom: 5000, page size: 100000
+  master list distance cutoff = 0.84
+  ghost atom cutoff = 0.84
+  binsize = 0.42, bins = 48 48 1
+  5 neighbor lists, perpetual/occasional/extra = 5 0 0
+  (1) pair rheo, perpetual, half/full from (2)
+      attributes: half, newton off
+      pair build: halffull/newtoff
+      stencil: none
+      bin: none
+  (2) compute rheo/kernel, perpetual
+      attributes: full, newton off
+      pair build: full/bin/atomonly
+      stencil: full/bin/2d
+      bin: standard
+  (3) compute rheo/grad, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+  (4) compute rheo/solids, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+  (5) compute rheo/vshift, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+Per MPI rank memory allocation (min/avg/max) = 32.47 | 32.52 | 32.57 Mbytes
+Step Time TotEng Temp Press 
+       0            0            0            0            0 
+     200    4.6666667 2.9371157e-07 2.9374094e-11 4.6116505e-08 
+     400    9.3333333 1.1595

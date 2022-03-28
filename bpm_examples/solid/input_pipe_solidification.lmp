@@ -1,0 +1,122 @@
+#################################################################################
+# RHEO demo to study pipe solidification
+#
+#      A cylinderical pipe is created with cold walls and a warm fluid interior
+#      A thermal expansion coefficient is applied using fix rheo/thermal which
+#      causes a dip to appear as the fluid solidifies. At long times times, this
+#      gets funky a bad damping term in the code. Revisit after it's fixed.
+#
+#################################################################################
+
+
+
+#################################
+###  General LAMMPS settings  ###
+#################################
+
+atom_style         rheo
+dimension          3
+boundary           p p s
+units              lj
+comm_modify        vel yes
+
+#################################
+###   Loading data files      ###
+#################################
+
+read_data          ./data_equilibrated
+
+region             outside cylinder z $(lx/2) $(ly/2) $(lx/2) EDGE EDGE side out units box
+delete_atoms       region outside
+
+region             outside2 cylinder z $(lx/2) $(ly/2) $(lx/2-3.0) EDGE EDGE side out units box
+
+region             base block EDGE EDGE EDGE EDGE EDGE 3.0 units box
+group              base region base
+
+region             walls union 2 outside2 base
+group              walls region walls
+group              fluid subtract all walls
+
+comm_modify        vel yes
+change_box all     boundary p p s
+#################################
+###  Setting atom properties  ###
+#################################
+
+variable	       rho0 equal 1.0
+variable           n equal 1.0
+variable           mp equal ${rho0}/${n}
+mass               1 ${mp}
+
+variable           h equal 3.0
+variable           cs equal 1.0
+variable           zeta equal 1.0
+
+variable           eta equal 0.1
+variable           D equal 0.01
+variable	       kappa equal ${D}*${rho0}/${mp}
+variable           Dr equal 0.2*${h}*${cs}
+
+set                group all rho ${rho0}
+set                group walls phase 4
+#set                group walls temp 0.0
+set                group walls temp 1.0
+set                group fluid temp 1.0
+
+velocity           all set 0.0 0.0 0.0
+
+#################################
+###   Setting interactions    ###
+#################################
+
+pair_style         hybrid/overlay rheo ${h} artificial/visc ${zeta} rho/damp ${Dr} rheo/freeze #thermal/expand
+pair_coeff         * * rheo ${rho0} ${cs}
+pair_coeff         * * rheo/freeze ${h} 2.0 1.0 1.0 0.05 1.0  #0.05 0.5 0.01
+
+# to add thermal expansion to solid domains, there's a flag which can be added
+# the pair coefficients then take 3 additional arguments corresponding to:
+# 1) Texpand
+# 2) The critical temperature of phase transition
+# 3) Tscale
+# A bond's length will scale by a factor of 1 + Texpand*((T-Tc)/Tscale) - will produce residual stress
+
+#################################
+###   Setting fixes           ###
+#################################
+
+fix               1 all rheo ${h} Quintic 5 thermal shift
+fix               2 all rheo/viscosity  constant ${eta}
+fix               3 fluid rheo/thermal conductivity constant ${kappa} cv constant 1.0 Tfreeze constant 0.5 alpha constant 0.05 #0.01
+
+# Alternatively to apply thermal expansion to the fluid, add on a 
+# thermal expansion coefficient to fix rheo/thermal, alpha.
+# This term simply shifts rho by 0.05*dT each timestep.
+
+fix               4 walls setforce 0.0 0.0 0.0
+fix               5 all rheo/surface ${h} 2.5 20
+fix               6 all balance 1000 1.05 shift x 10 1.05
+fix               7 fluid addforce 0.0 0.0 -5e-5 #~gravity
+ 
+
+timestep 0.1
+
+#################################
+###   Output data & run       ###
+#################################
+
+thermo             100
+thermo_style       custom step dt time ke pe press
+
+compute            phase all property/atom phase
+compute            rho all property/atom rho
+compute            temp all property/atom temp
+compute            nbond all property/atom i_rheo_freeze_nbond
+dump               mydump all custom 100 ./pipe_solidification_dump/dump.* id x y z c_phase c_temp c_nbond c_rho
+
+restart  10000 myrestart
+run      10000
+
+set                group walls temp 0.0
+
+run      50000

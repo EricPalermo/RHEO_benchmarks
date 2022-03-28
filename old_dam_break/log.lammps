@@ -1,0 +1,232 @@
+LAMMPS (29 Oct 2020)
+  using 8 OpenMP thread(s) per MPI task
+dimension          2
+units              lj
+atom_style         rheo
+boundary           f s p
+comm_modify        vel yes
+newton off
+
+## Particle Lattice/Resolution Parameters
+variable           L equal 10
+variable           t_tot equal 750
+variable           sf equal .2 #/${L} #scaling of unit cell
+variable           nb equal 1    #number of basis atoms depends on lattice
+variable           n equal ${nb}/(${sf}^2)
+variable           n equal 1/(${sf}^2)
+variable           n equal 1/(0.2^2)
+variable           del equal ${sf}#*sqrt(2)
+variable           del equal 0.2
+variable           hd equal 3.5
+variable           h3 equal ${hd}*${del}
+variable           h3 equal 3.5*${del}
+variable           h3 equal 3.5*0.2
+variable           dz equal 0.1*${sf}
+variable           dz equal 0.1*0.2
+
+# create simulation box
+
+read_restart          restart_static
+Reading restart file ...
+  restart file = 29 Oct 2020, LAMMPS = 29 Oct 2020
+WARNING: Restart file used different # of processors: 8 vs. 4 (src/read_restart.cpp:697)
+  restoring atom style rheo from restart
+  orthogonal box = (0.0000000 -10.003000 -0.02) to (20.000000 20.003000 0.02)
+  2 by 2 by 1 MPI processor grid
+  pair style rheo stores no restart info
+  6470 atoms
+  read_restart CPU = 0.003 seconds
+
+###########################
+### COMMENT FOR RESTART ###
+###########################
+# region             box block 0 20 -10 20 -${dz} ${dz} units box
+# create_box         3 box
+# lattice            sq ${n}
+
+# region             left_wall block 0 1 -8.99 20 -${dz} ${dz} units box
+# region             right_wall block 19 20 -8.99 20 -${dz} ${dz} units box
+# region             bot_wall block 0 20 -10 -9 -${dz} ${dz} units box
+# region             interior block 1.01 8.99 -8.99 10 -${dz} ${dz} units box
+# region             mid_wall block 9 10 -8.99 10 -${dz} ${dz} units box
+# create_atoms       1 region interior
+# create_atoms       2 region left_wall
+# create_atoms       2 region right_wall
+# create_atoms       2 region bot_wall
+# create_atoms       3 region mid_wall
+###########################
+### COMMENT FOR RESTART ###
+###########################
+
+group              fluid type 1
+3705 atoms in group fluid
+group              stat_wall type 2
+2195 atoms in group stat_wall
+group              dyn_wall type 3
+570 atoms in group dyn_wall
+group              wall union stat_wall dyn_wall
+2765 atoms in group wall
+
+
+#Now randomly displace in x and y up %20 of their spacing (sf)
+# variable           seed equal 135414
+# variable           dr equal 0.1*${del}
+# displace_atoms     fluid random ${dr} ${dr} 0 ${seed} units box
+
+
+# Potential parameters eta = 1, cs = 0 so force gives laplacian
+variable           rho0 equal 1.0
+variable           mp equal ${rho0}/${n}
+variable           mp equal 1/${n}
+variable           mp equal 1/25
+variable           cs equal 1
+variable           zeta equal 0.24
+variable           D equal 1.0
+variable	       kappa equal ${D}*${rho0}/${mp}
+variable	       kappa equal 1*${rho0}/${mp}
+variable	       kappa equal 1*1/${mp}
+variable	       kappa equal 1*1/0.04
+variable           fext equal 1e-5/${n}
+variable           fext equal 1e-5/25
+#Viscosity parameters
+variable           eta equal 0.01
+#(for a Herschel-Bulkley fluid - special case: power law)
+variable           gd0 equal 1e-2
+variable           npow equal 0.5
+variable           K equal ${eta}*${gd0}^(1-${npow})
+variable           K equal 0.01*${gd0}^(1-${npow})
+variable           K equal 0.01*0.01^(1-${npow})
+variable           K equal 0.01*0.01^(1-0.5)
+
+
+#Set particle properties
+# mass               1 ${mp}
+# mass               2 ${mp}
+# mass               3 ${mp}
+
+# set                group all rho ${rho0}
+# set                group all phase 0
+# set                group wall phase 4
+
+# set                group all temp 1.0
+
+
+#Integration and Kernel
+fix                1 all rheo ${h3} CRK1 0 shift # rhosum 1
+fix                1 all rheo 0.7 CRK1 0 shift 
+Resetting peratom fix info from restart file:
+  fix style: property/atom, fix ID: PROPERTY_ATOM_RHEO_KERNEL
+fix                2 all rheo/viscosity constant ${eta}
+fix                2 all rheo/viscosity constant 0.01
+#fix                2 all rheo/viscosity power ${eta} ${gd0} ${K} ${npow}
+fix                3 all rheo/surface ${h3} 1.5 25
+fix                3 all rheo/surface 0.7 1.5 25
+Resetting peratom fix info from restart file:
+  fix style: property/atom, fix ID: PROPERTY_ATOM_RHEO_SURFACE
+
+fix                4 wall setforce 0.0 0.0 0.0
+fix                5 fluid addforce 0.0 -1e-5 0.0
+fix                6 dyn_wall move linear 0.0 0.05 0.0
+
+
+variable           Dr equal 0.5*${h3}*${cs}
+variable           Dr equal 0.5*0.7*${cs}
+variable           Dr equal 0.5*0.7*1
+pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr}
+pair_style         rheo 0.7 artificial/visc ${zeta} rho/damp ${Dr}  
+pair_style         rheo 0.7 artificial/visc 0.24 rho/damp ${Dr}  
+pair_style         rheo 0.7 artificial/visc 0.24 rho/damp 0.35  
+pair_coeff         * * ${rho0} ${cs}
+pair_coeff         * * 1 ${cs}
+pair_coeff         * * 1 1
+
+#Timestep
+variable           dt_max equal  0.1*${h3}/${cs}/3 #CFL criterion
+variable           dt_max equal  0.1*0.7/${cs}/3 
+variable           dt_max equal  0.1*0.7/1/3 
+#variable           dt_max equal 0.125*${h3}*${h3}/${eta}/9 #Viscous criterion
+#variable           dt_max equal 0.1*${sf}/.01
+#variable           dx_max equal ${h3}/100
+timestep           ${dt_max}
+timestep           0.0233333333333333
+#fix                dtr all dt/reset 1 NULL ${dt_max} ${dx_max}  units box
+variable           Nsteps equal round(${t_tot}/${dt_max})
+variable           Nsteps equal round(750/${dt_max})
+variable           Nsteps equal round(750/0.0233333333333333)
+
+compute            den all property/atom rho
+compute            phase all property/atom phase
+compute            eta all property/atom viscosity
+
+thermo             200
+thermo_style       custom step time etotal temp press
+
+thermo_modify      norm no
+dump               1 all custom 100 dam_break_CRK1.atoms id type x y vx vy fx fy c_den c_phase c_eta #f_rheo_chi_chi
+dump               2 all netcdf 100 dam_break_CRK1.nc id type x y z vx vy vz fx fy c_den c_phase c_eta #f_rheo_chi_chi
+variable           skin equal 0.2*${h3}
+variable           skin equal 0.2*0.7
+neighbor           ${skin} bin
+neighbor           0.14 bin
+neigh_modify       one 5000
+run                ${Nsteps}
+run                32143
+Unused restart file peratom fix info:
+  fix style: property/atom, fix ID: PROPERTY_ATOM_COMP_RHEO_SOLIDS
+WARNING: One or more atoms are time integrated more than once (src/modify.cpp:285)
+Neighbor list info ...
+  update every 1 steps, delay 10 steps, check yes
+  max neighbors/atom: 5000, page size: 100000
+  master list distance cutoff = 0.84
+  ghost atom cutoff = 0.84
+  binsize = 0.42, bins = 48 72 1
+  6 neighbor lists, perpetual/occasional/extra = 6 0 0
+  (1) pair rheo, perpetual, half/full from (2)
+      attributes: half, newton off
+      pair build: halffull/newtoff
+      stencil: none
+      bin: none
+  (2) compute rheo/kernel, perpetual
+      attributes: full, newton off
+      pair build: full/bin/atomonly
+      stencil: full/bin/2d
+      bin: standard
+  (3) compute rheo/grad, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+  (4) compute rheo/solids, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+  (5) compute rheo/vshift, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+  (6) fix rheo/surface, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+Per MPI rank memory allocation (min/avg/max) = 32.84 | 33.58 | 35.64 Mbytes
+Step Time TotEng Temp Press 
+   12857            0 3.1991037e-05 4.9452832e-09 0.00054939514 
+   13000    3.3366667  0.032049564 4.9543305e-06 0.00031698228 
+   13200    8.0033333  0.038418416 5.9388493e-06 -0.00062438181 
+   13400        12.67  0.043366944 6.7038096e-06 -0.0018347403 
+   13600    17.336667  0.047253777 7.3046494e-06 -0.0026168716 
+   13800    22.003333  0.049330866 7.6257328e-06 -0.0022444915 
+   14000        26.67  0.052830569 8.1667288e-06 -0.0023221823 
+   14200    31.336667  0.069181025 1.0694238e-05 -0.0029239847 
+   14400    36.003333  0.089412277 1.3821654e-05 -0.0039859123 
+   14600        40.67  0.067723193 1.0468881e-05 -0.0045623046 
+   14800    45.336667  0.075475599 1.1667274e-05 -0.0037062727 
+   15000    50.003333    0.0716817 1.1080801e-05 -0.0027463156 
+   15200        54.67   0.15265133 2.3597362e-05 -0.00036056693 
+   15400    59.336667    0.1414437 2.1864847e-05 -0.0025651577 
+   15600    64.003333    8.0816756 0.0012492929 0.0076943358 
+ERROR: Lost atoms: original 6470 current 6469 (src/thermo.cpp:427)
+Last command: run                ${Nsteps}

@@ -1,0 +1,137 @@
+#################################################################################
+# RHEO demo to create a melting beam
+#
+#      Using the previously created data file, the input script creates a
+#      rectangular pillar and heats one side (surface particles with a given
+#      normal vector). Solid particles melt and flow, potentially with oxidation
+#      if you uncomment the react pair style and maybe tweak surface (works poorly)
+#
+#################################################################################
+
+
+
+#################################
+###  General LAMMPS settings  ###
+#################################
+
+atom_style         rheo
+dimension          3
+boundary           m m m
+units              lj
+comm_modify        vel yes
+
+#################################
+###   Loading data files      ###
+#################################
+
+read_data          ./../fluid/data_equilibrated
+
+region             box1 block EDGE EDGE EDGE EDGE EDGE 2.0
+region             box2 block $(lx/4) $(3*lx/4) $(ly/4) $(3*ly/4) 2.0 EDGE
+region             box12 union 2 box1 box2
+
+group              interior region box12
+group              exterior subtract all interior
+
+delete_atoms       group exterior
+
+group              base region box1
+group              beam region box2
+velocity           all set 0.0 0.0 0.0
+
+#################################
+###  Setting atom properties  ###
+#################################
+
+variable	       rho0 equal 1.0
+variable           n equal 1.0
+variable           mp equal ${rho0}/${n}
+mass               1 ${mp}
+
+variable           h equal 3.0
+variable           cs equal 1.0
+variable           zeta equal 1.0
+
+variable           eta equal 0.1
+variable           D equal 0.01
+variable	       kappa equal ${D}*${rho0}/${mp}
+
+set                group all rho ${rho0}
+set                group all temp 0.0
+set                group base phase 4 #set it solid, no need for bonds
+set                group beam phase 5 #set it freezing so bonds form
+
+#################################
+###   Setting interactions    ###
+#################################
+
+pair_style         hybrid/overlay rheo ${h} artificial/visc ${zeta} rho/damp 0.5 rheo/freeze rheo/react
+pair_coeff         * * rheo ${rho0} ${cs}
+pair_coeff         * * rheo/freeze ${h} 2.0 2.0 1.0 0.05 1.0
+pair_coeff         * * rheo/react ${h} 1.5 0.1 0.03 1.0 1.0 1.0 0.75 1.0
+
+# The oxidation currently does not really work, fix rheo surface
+# detects surfaces inside the melting fluid. I think this either
+# has to do with either a) gravity being too strong or b) the
+# erroneous damping term which drives fluid particles away from
+# solids. Need to revisit after that damping term is fixed.
+
+#################################
+###   Setting fixes           ###
+#################################
+
+fix               1 all rheo ${h} Quintic 5 thermal shift
+fix               2 all rheo/viscosity  aluminum ${eta} 10.0 10.0 1.0 0.25
+# This is a more realistic thermal based viscosity
+# parameters are eta, a, b, T0, Tc
+# where visc = eta*exp(-a/(q+exp(b*(T0-T)))) if T > Tc (molten)
+# and        = eta*exp(-a/(q+exp(b*(T0-Tc)))) if T < Tc (solid)
+
+fix               3 all rheo/surface ${h} 2.5 20
+
+
+compute            surf all property/atom surface
+variable          surface atom (f_3[1]>0.5)&&(c_surf>1) #variable surface is binary value?
+group             surface dynamic beam var surface #if var surface==0.0, assign to surface group
+# Surface variable is a per atom integer variable//0-bulk 1-surf vicinity  2-surface 3-splash
+# here it grabs particles with a surface normal pointing in the x direction
+# e.g. heats one side
+# Note this isn't perfect since particles inside the bulk can be identified atom_style
+# surface particles - need to fix
+
+fix               5 base setforce 0.0 0.0 0.0 #make the base stationary
+fix               6 all rheo/thermal conductivity constant ${kappa} cv constant 1.0 Tfreeze constant 0.25 #define thermal parameters for rheo/thermal
+# Rheo thermal evolves temperature, here use constant thermal properties
+# but could have them depend on T or particle type, for instance
+# If T < Tfreeze, the phase will turn to freezing (bonds will form) which
+# will then automatically swap to solid on the next timestep
+
+fix               8 beam addforce 0.0 0.0 -5e-5 #add approximate gravitational (z-direction) force
+fix               9 all balance 1000 1.05 shift x 10 1.05 #
+#fix balance divides atoms among subprocessors by computation effort required rather than the default division by spatial position
+#this is good practice for simulation where different types (i.e. phases) require different computational effort
+
+timestep 0.1
+#Look into computational timestep criterion to be more rigorous about timestep choice
+
+#################################
+###   Output data & run       ###
+#################################
+
+thermo             100
+thermo_style       custom step dt time ke pe press
+
+
+compute            phase all property/atom phase
+compute            rho all property/atom rho
+compute            temp all property/atom temp
+compute            visc all property/atom viscosity
+compute            nbond all property/atom i_rheo_freeze_nbond
+dump               mydump all custom 500 ./melt_block_ox_dump/dump.* id type x y z c_phase c_temp c_surf c_nbond c_visc f_3[1]
+
+
+run      4000  #relax under "gravity"
+
+fix               7 surface rheo/add/heat 0.005
+
+run      50000

@@ -1,0 +1,156 @@
+#################################################################################
+# RHEO demo to create a falling water balloon to demonstrate elastic membranes
+#
+#   Use reactive particles to easily specify how thick the membrane is
+#
+#################################################################################
+
+
+
+#################################
+###  General LAMMPS settings  ###
+#################################
+
+atom_style         rheo
+dimension          3
+boundary           f f f               #To start i'm using fixed boundaries
+                                       #to avoid issues with deleting atoms
+units              lj
+comm_modify        vel yes
+
+#################################
+###   Loading data files      ###
+#################################
+
+read_data          data_equilibrated   #using data file from other script
+
+region             1 sphere $(lx/2) $(ly/2) $(lz/2) $(lx/2) side out
+delete_atoms       region 1
+
+# Expand the box so we can create atoms below
+change_box         all z final -60 $(zhi)
+change_box         all y final 0 60
+lattice            fcc 1.0
+
+# Here I create two little steps, something for the balloon to interact with
+region             box1 block EDGE EDGE EDGE $(ly/5) -10 -7 units box
+create_atoms       1 region box1
+group              base1 region box1
+
+region             box2 block EDGE $(lx/3) EDGE EDGE -40 -37 units box
+create_atoms       1 region box2
+group              base2 region box2
+
+group base union base1 base2
+group fluid subtract all base
+
+change_box         all boundary m m s  # Here I'm switch boundaries to
+                                       # s = shrink wrapped (smallest size that fits atoms)
+                                       # m = shrink wrapped but not less than the current size
+velocity           all set 0.0 0.0 0.0
+
+#################################
+###  Setting atom properties  ###
+#################################
+
+variable	       rho0 equal 1.0
+variable           n equal 1.0
+variable           mp equal ${rho0}/${n}
+mass               1 ${mp}
+
+variable           h equal 3.0
+variable           cs equal 1.0
+variable           zeta equal 1.0
+
+variable           eta equal 0.1
+variable           D equal 1.0
+variable	       kappa equal ${D}*${rho0}/${mp}
+
+set                group all rho ${rho0}
+set                group base phase 4
+
+# Set initial velocity of droplet and wall
+velocity           all set 0.0 0.0 -0.01 units box
+velocity           base set 0.0 0.0 0.0  units box
+
+#################################
+###   Setting interactions    ###
+#################################
+
+pair_style         hybrid/overlay rheo ${h} artificial/visc ${zeta} rheo/react
+
+# Pair rheo/react is similar to rheo/frozen except it is optimized for dynamic
+# membranes that can (optionally) evolve with time. Any pair of fluid particles
+# on the surface for X timesteps will create a bond - but you could have other
+# criteria in the future (temperature, yield stress, etc).
+# In contrast rheo/freeze which only forms bonds when going through a transition,
+# this pair style can be used to continually produce/break bonds as long as the
+# criteria is met. Kind of dynamic vs static.
+# Here we use to to easily create a membrane of a given thickness
+# Any fluid particle meeting the criteria can form a bond, once they form a bond
+# the phase changes to a reactive state, indicated by a phase of 3
+# This is done such that fluid forces are turned off and don't interfere with the
+# bond. Once all bonds break, the particle will revert to a fluid (without shifting to be safe)
+# Nonbonded reactive particles will feel a repulsion to each other (or solid particles)
+# to prevent overlap.
+
+pair_coeff         * * rheo ${rho0} ${cs}
+pair_coeff         * * rheo/react ${h} 1.5 0.1 1.0 1.0 1 1.5 0.8 2.0
+
+
+# Coefficients for rheo/react are:
+# 1) Maximum length of the interaction (must be >= max bond length * max stretch)
+# 2) Maximum distance a bond can span
+# 3) Stiffness of bond - in this case the stiffness is comparable to the bulk
+#    modulus of a fluid so there will be elastic deformation.
+# 4) The maximum strain between two particles before a bond will break. Set high
+#    so the balloon doesn't pop.
+# 5) In addition to the spring forces, particles will damp out normal velocity
+#    differences while interacting (this is like DPD). This last parameter is
+#    the strength of this damping.
+# 6) How much time two particles have to meet the bonding criteria to before they form a bond
+# 7) The distance from the surface at which bonds can form, max is h - how thick the
+#    membrane will be.
+# 8) The interaction distance of non-bonded particles
+# 9) The stiffness of non-bonded particles - should be high to prevent overlap
+
+#################################
+###   Setting fixes           ###
+#################################
+
+fix               1 all rheo ${h} Quintic 5 shift
+fix               2 all rheo/viscosity constant ${eta}
+fix               3 base setforce 0.0 0.0 0.0    # Ensure no forces are applied to the wall
+                                                 # such that it never moves
+
+fix               4 all rheo/surface ${h} 2.8 20
+fix               5 fluid addforce 0.0 0.0 -1e-4
+fix               6 all balance 1000 1.05 shift x 10 1.05 # improve processor layout for speedups
+
+timestep 0.1
+
+#################################
+###   Output data & run       ###
+#################################
+
+thermo             100
+thermo_style       custom step dt time ke pe press
+
+compute            phase all property/atom phase
+compute            nbond all property/atom i_rheo_react_nbond
+compute            rho all property/atom rho
+compute            surf all property/atom surface
+compute            coord all property/atom i_coordination
+compute            divr all property/atom d_divr
+
+dump               dump_id all custom 200 ./dump/dump.* id x y z c_phase c_nbond c_rho c_surf c_coord c_divr fx fy fz
+
+# First we run for a short period of time with a small time to form bonds
+# to rapdily create the initial shell (so the simulation can be run faster)
+run   100
+
+# Then we increase the bond formation time (1000) to the desired duration and
+# let the droplet fall and impact
+pair_coeff         * * rheo/react ${h} 1.5 0.1 1.0 1.0 1000 1.5 0.8 2.0
+
+run   22000

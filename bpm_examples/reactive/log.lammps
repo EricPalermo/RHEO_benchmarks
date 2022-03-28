@@ -1,0 +1,106 @@
+LAMMPS (29 Oct 2020)
+  using 8 OpenMP thread(s) per MPI task
+#################################################################################
+# RHEO demo to create an oxidizing droplet
+#
+#      Using the previously created data file, the input script creates a sphere
+#      over a flat wall. The sphere is then given a velocity and impacts the wall.
+#      Surface atoms on the sphere oxidize over time, creating an elastic shell.
+#      Varying the properties of the oxide interaction (stiffness, fracture strain),
+#      you can see a wide variety of phenomenologies.
+#
+#################################################################################
+
+
+
+#################################
+###  General LAMMPS settings  ###
+#################################
+
+atom_style         rheo
+dimension          3
+boundary           f f f               #To start i'm using fixed boundaries
+                                       #to avoid issues with deleting atoms
+units              lj
+comm_modify        vel yes
+
+#################################
+###   Loading data files      ###
+#################################
+
+read_data          ../fluid/data_equilibrated   #using data file from other script
+Reading data file ...
+  orthogonal box = (0.0000000 0.0000000 0.0000000) to (31.748021 31.748021 31.748021)
+  1 by 2 by 2 MPI processor grid
+  reading atoms ...
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in z direction for non-periodic boundary (src/atom.cpp:1199)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in z direction for non-periodic boundary (src/atom.cpp:1199)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in z direction for non-periodic boundary (src/atom.cpp:1199)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in z direction for non-periodic boundary (src/atom.cpp:1199)
+WARNING: Non-zero imageflag(s) in x direction for non-periodic boundary (src/atom.cpp:1195)
+WARNING: Non-zero imageflag(s) in y direction for non-periodic boundary (src/atom.cpp:1197)
+WARNING: Non-zero imageflag(s) in z direction for non-periodic boundary (src/atom.cpp:1199)
+  32000 atoms
+  reading velocities ...
+  32000 velocities
+  read_data CPU = 0.039 seconds
+
+# First create the droplet
+region             1 sphere $(lx/2) $(ly/2) $(lz/2) $(lx/2-5) side out
+region             1 sphere 15.874010519682000719 $(ly/2) $(lz/2) $(lx/2-5) side out
+region             1 sphere 15.874010519682000719 15.874010519682000719 $(lz/2) $(lx/2-5) side out
+region             1 sphere 15.874010519682000719 15.874010519682000719 15.874010519682000719 $(lx/2-5) side out
+region             1 sphere 15.874010519682000719 15.874010519682000719 15.874010519682000719 10.874010519682000719 side out
+delete_atoms       region 1
+Deleted 26603 atoms, new total = 5397
+
+# Then reread file and shift it downwards to create wall
+read_data          ../data_equilibrated add append group base shift 0.0 0.0 -50 #-35
+Reading data file ...
+ERROR on proc 0: Cannot open file ../data_equilibrated: No such file or directory (src/read_data.cpp:1965)

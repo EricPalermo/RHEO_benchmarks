@@ -1,0 +1,94 @@
+#################################################################################
+# RHEO demo to create single moving solid body
+#
+#      Similar to spinning, test if fluid particles overlap solid
+#      See other input script for comments, does NOT work with CRK2
+#
+#################################################################################
+
+#################################
+###  General LAMMPS settings  ###
+#################################
+
+atom_style         rheo
+dimension          3
+newton             on
+boundary           p p p
+units              lj
+comm_modify        vel yes
+
+read_data          data_with_grain
+#read_data         ./../fluid/data_equilibrated
+
+# Create group for grain to use for further commands
+region            center sphere $(lx*0.5) $(ly*0.5) $(lz*0.5) 5.0
+group             grain region center
+
+# If we loaded data_equilibrated, set initial phase of solid region
+# set               group grain phase 5
+
+velocity          all set 0.0 0.0 0.0
+
+#################################
+###  Setting atom properties  ###
+#################################
+
+variable	       rho0 equal 1.0
+variable           n equal 1.0
+variable           mp equal ${rho0}/${n}
+
+mass               1 ${mp}
+set                group all rho ${rho0}
+set                group all temp 1.0
+
+#################################
+###   Setting interactions    ###
+#################################
+
+variable           h equal 3.0
+variable           cs equal 1.0
+variable           eta equal 0.2
+variable           zeta equal 0.1
+variable           Dr equal 0.2*${h}*${cs}
+
+pair_style         hybrid/overlay rheo ${h} artificial/visc ${zeta} rho/damp ${Dr} rheo/freeze
+pair_coeff         * * rheo ${rho0} ${cs}
+pair_coeff         * * rheo/freeze ${h} 1.8 1.0 1.0 0.2 1.0
+
+#################################
+###    Simulation settings    ###
+#################################
+
+velocity          grain set 1e-2 0.0 0.0
+fix               1 all rheo ${h} CRK0 0 shift
+fix               2 all rheo/viscosity constant ${eta}
+fix               3 grain setforce 0.0 0.0 0.0
+timestep          0.01
+
+#################################
+###   Output data & run       ###
+#################################
+
+thermo             100
+thermo_style       custom step dt time ke pe press
+
+compute            phase all property/atom phase
+compute            nbond all property/atom i_rheo_freeze_nbond
+compute            rho all property/atom rho
+
+dump               dump_id all custom 500 ./moving_grain_dump/dump.* id x y z c_phase c_nbond c_rho vx
+
+run              50000
+
+
+# results
+
+#No evolution
+#no shift = overlap at surface level
+#   shift = no overlap w/ Quintic but overlap with CRK1 + explode CRK2
+
+#Evolution (forms gap bubble for CRK1 & 2)
+#no shift = works with Quintic & CRK1 but overlap + explode CRK2
+#   shift = works with Quintic & CRK1 but overlap with CRK2
+
+

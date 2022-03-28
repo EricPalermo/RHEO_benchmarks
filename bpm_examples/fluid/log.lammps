@@ -1,0 +1,109 @@
+LAMMPS (29 Oct 2020)
+  using 8 OpenMP thread(s) per MPI task
+#################################################################################
+# RHEO demo to create a decaying transverse wave
+#
+#      It initially places a lattice of atoms (could replace with read_data
+#      command) and creates a transverse wave by setting atom velocities. The
+#      wave then decays due to viscosity. Decay rate should be very accurate
+#      for CRK but only okay for quintic.
+#
+#################################################################################
+
+#################################
+###  General LAMMPS settings  ###
+#################################
+
+atom_style         rheo
+dimension          3
+newton             on
+boundary           p p p
+units              lj
+comm_modify        vel yes
+#read_data         data_equilibrated
+# could use this instead to start w/ a disordered particle arrangement
+
+#################################
+###   Defining initial box    ###
+#################################
+
+variable	       rho0 equal 1.0
+variable           n equal 1.0
+variable           mp equal ${rho0}/${n}
+variable           mp equal 1/${n}
+variable           mp equal 1/1
+
+variable           Lx equal $(20*(4.0/v_n)^(1.0/3.0))
+variable           Lx equal 31.748021039363987228
+variable           Ly equal $(10*(4.0/v_n)^(1.0/3.0))
+variable           Ly equal 15.874010519681993614
+variable           Lz equal $(10*(4.0/v_n)^(1.0/3.0))
+variable           Lz equal 15.874010519681993614
+
+lattice            fcc ${n}
+lattice            fcc 1
+Lattice spacing in x,y,z = 1.5874011 1.5874011 1.5874011
+region             box block 0 $(v_Lx) 0 $(v_Ly) 0 $(v_Lz) units box
+region             box block 0 31.748021039364001439 0 $(v_Ly) 0 $(v_Lz) units box
+region             box block 0 31.748021039364001439 0 15.874010519682000719 0 $(v_Lz) units box
+region             box block 0 31.748021039364001439 0 15.874010519682000719 0 15.874010519682000719 units box
+create_box         1 box
+Created orthogonal box = (0.0000000 0.0000000 0.0000000) to (31.748021 15.874011 15.874011)
+  2 by 1 by 2 MPI processor grid
+create_atoms       1 region box
+Created 8000 atoms
+  create_atoms CPU = 0.001 seconds
+
+#################################
+###  Setting atom properties  ###
+#################################
+
+mass               1 ${mp}
+mass               1 1
+set                group all rho ${rho0}
+set                group all rho 1
+Setting atom values ...
+  8000 settings made for rho
+set                group all phase 0
+Setting atom values ...
+  8000 settings made for phase
+set                group all temp 1.0
+Setting atom values ...
+  8000 settings made for temp
+
+variable           vprof atom 0.01*sin(x*2*PI/lx)
+velocity           all set 0.0 v_vprof 0.0 units box # Transverse wave
+
+#################################
+###   Setting interactions    ###
+#################################
+
+variable           h equal 3.0                # This is the kernel cutoff length
+variable           cs equal 1.0               # The speed of sound
+variable           eta equal 0.2              # The viscosity
+variable           zeta equal 0.1             # The 'artificial' viscosity
+variable           Dr equal 0.2*${h}*${cs}    # The density damping
+variable           Dr equal 0.2*3*${cs}    
+variable           Dr equal 0.2*3*1    
+
+pair_style         rheo ${h} artificial/visc ${zeta} rho/damp ${Dr}
+pair_style         rheo 3 artificial/visc ${zeta} rho/damp ${Dr}
+pair_style         rheo 3 artificial/visc 0.1 rho/damp ${Dr}
+pair_style         rheo 3 artificial/visc 0.1 rho/damp 0.6
+pair_coeff         * * ${rho0} ${cs}
+pair_coeff         * * 1 ${cs}
+pair_coeff         * * 1 1
+
+
+#################################
+###   Setting fixes           ###
+#################################
+
+#start with CRK1, can switch to Quintic or CRK2 to test effect/convergence
+fix               1 all rheo ${h} CRK1 5 shift
+fix               1 all rheo 3 CRK1 5 shift
+fix               2 all rheo/viscosity constant ${eta}
+fix               2 all rheo/viscosity constant 0.2
+
+#################################
+###   
