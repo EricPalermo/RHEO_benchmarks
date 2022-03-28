@@ -9,7 +9,7 @@ newton off
 
 ## Particle Lattice/Resolution Parameters
 variable           L equal 10
-variable           t_tot equal 750
+variable           t_tot equal 300
 variable           sf equal .2 #/${L} #scaling of unit cell
 variable           nb equal 1    #number of basis atoms depends on lattice
 variable           n equal ${nb}/(${sf}^2)
@@ -26,37 +26,50 @@ variable           dz equal 0.1*0.2
 
 # create simulation box
 
-read_restart          restart_static
-Reading restart file ...
-  restart file = 29 Oct 2020, LAMMPS = 29 Oct 2020
-WARNING: Restart file used different # of processors: 8 vs. 4 (src/read_restart.cpp:697)
-  restoring atom style rheo from restart
-  orthogonal box = (0.0000000 -10.003000 -0.02) to (20.000000 20.003000 0.02)
-  2 by 2 by 1 MPI processor grid
-  pair style rheo stores no restart info
-  6470 atoms
-  read_restart CPU = 0.003 seconds
-
+# read_restart       restart_adj_param.857143
 ###########################
 ### COMMENT FOR RESTART ###
-###########################
-# region             box block 0 20 -10 20 -${dz} ${dz} units box
-# create_box         3 box
-# lattice            sq ${n}
 
-# region             left_wall block 0 1 -8.99 20 -${dz} ${dz} units box
-# region             right_wall block 19 20 -8.99 20 -${dz} ${dz} units box
-# region             bot_wall block 0 20 -10 -9 -${dz} ${dz} units box
-# region             interior block 1.01 8.99 -8.99 10 -${dz} ${dz} units box
-# region             mid_wall block 9 10 -8.99 10 -${dz} ${dz} units box
-# create_atoms       1 region interior
-# create_atoms       2 region left_wall
-# create_atoms       2 region right_wall
-# create_atoms       2 region bot_wall
-# create_atoms       3 region mid_wall
-###########################
-### COMMENT FOR RESTART ###
-###########################
+region             box block 0 20 -10 20 -${dz} ${dz} units box
+region             box block 0 20 -10 20 -0.02 ${dz} units box
+region             box block 0 20 -10 20 -0.02 0.02 units box
+create_box         3 box
+Created orthogonal box = (0.0000000 -10.000000 -0.02) to (20.000000 20.000000 0.02)
+  1 by 2 by 1 MPI processor grid
+lattice            sq ${n}
+lattice            sq 25
+Lattice spacing in x,y,z = 0.2 0.2 0.2
+
+region             left_wall block 0 1 -8.99 20 -${dz} ${dz} units box
+region             left_wall block 0 1 -8.99 20 -0.02 ${dz} units box
+region             left_wall block 0 1 -8.99 20 -0.02 0.02 units box
+region             right_wall block 19 20 -8.99 20 -${dz} ${dz} units box
+region             right_wall block 19 20 -8.99 20 -0.02 ${dz} units box
+region             right_wall block 19 20 -8.99 20 -0.02 0.02 units box
+region             bot_wall block 0 20 -10 -9 -${dz} ${dz} units box
+region             bot_wall block 0 20 -10 -9 -0.02 ${dz} units box
+region             bot_wall block 0 20 -10 -9 -0.02 0.02 units box
+region             interior block 1.01 8.99 -8.99 10 -${dz} ${dz} units box
+region             interior block 1.01 8.99 -8.99 10 -0.02 ${dz} units box
+region             interior block 1.01 8.99 -8.99 10 -0.02 0.02 units box
+region             mid_wall block 9 10 -8.99 10 -${dz} ${dz} units box
+region             mid_wall block 9 10 -8.99 10 -0.02 ${dz} units box
+region             mid_wall block 9 10 -8.99 10 -0.02 0.02 units box
+create_atoms       1 region interior
+Created 3705 atoms
+  create_atoms CPU = 0.001 seconds
+create_atoms       2 region left_wall
+Created 870 atoms
+  create_atoms CPU = 0.000 seconds
+create_atoms       2 region right_wall
+Created 725 atoms
+  create_atoms CPU = 0.000 seconds
+create_atoms       2 region bot_wall
+Created 600 atoms
+  create_atoms CPU = 0.000 seconds
+create_atoms       3 region mid_wall
+Created 570 atoms
+  create_atoms CPU = 0.000 seconds
 
 group              fluid type 1
 3705 atoms in group fluid
@@ -69,10 +82,16 @@ group              wall union stat_wall dyn_wall
 
 
 #Now randomly displace in x and y up %20 of their spacing (sf)
-# variable           seed equal 135414
-# variable           dr equal 0.1*${del}
-# displace_atoms     fluid random ${dr} ${dr} 0 ${seed} units box
-
+variable           seed equal 135414
+variable           dr equal 0.1*${del}
+variable           dr equal 0.1*0.2
+displace_atoms     fluid random ${dr} ${dr} 0 ${seed} units box
+displace_atoms     fluid random 0.02 ${dr} 0 ${seed} units box
+displace_atoms     fluid random 0.02 0.02 0 ${seed} units box
+displace_atoms     fluid random 0.02 0.02 0 135414 units box
+Displacing atoms ...
+### COMMENT FOR RESTART ###
+###########################
 
 # Potential parameters eta = 1, cs = 0 so force gives laplacian
 variable           rho0 equal 1.0
@@ -99,34 +118,42 @@ variable           K equal 0.01*0.01^(1-${npow})
 variable           K equal 0.01*0.01^(1-0.5)
 
 
-#Set particle properties
-# mass               1 ${mp}
-# mass               2 ${mp}
-# mass               3 ${mp}
+# Set particle properties
+mass               1 ${mp}
+mass               1 0.04
+mass               2 ${mp}
+mass               2 0.04
+mass               3 ${mp}
+mass               3 0.04
 
-# set                group all rho ${rho0}
-# set                group all phase 0
-# set                group wall phase 4
+set                group all rho ${rho0}
+set                group all rho 1
+Setting atom values ...
+  6470 settings made for rho
+set                group all phase 0
+Setting atom values ...
+  6470 settings made for phase
+set                group wall phase 4
+Setting atom values ...
+  2765 settings made for phase
 
-# set                group all temp 1.0
+set                group all temp 1.0
+Setting atom values ...
+  6470 settings made for temp
 
 
 #Integration and Kernel
-fix                1 all rheo ${h3} CRK1 0 shift # rhosum 1
-fix                1 all rheo 0.7 CRK1 0 shift 
-Resetting peratom fix info from restart file:
-  fix style: property/atom, fix ID: PROPERTY_ATOM_RHEO_KERNEL
+fix                1 all rheo ${h3} CRK0 0 shift # rhosum 1
+fix                1 all rheo 0.7 CRK0 0 shift 
 fix                2 all rheo/viscosity constant ${eta}
 fix                2 all rheo/viscosity constant 0.01
 #fix                2 all rheo/viscosity power ${eta} ${gd0} ${K} ${npow}
 fix                3 all rheo/surface ${h3} 1.5 25
 fix                3 all rheo/surface 0.7 1.5 25
-Resetting peratom fix info from restart file:
-  fix style: property/atom, fix ID: PROPERTY_ATOM_RHEO_SURFACE
 
 fix                4 wall setforce 0.0 0.0 0.0
 fix                5 fluid addforce 0.0 -1e-5 0.0
-fix                6 dyn_wall move linear 0.0 0.05 0.0
+#fix                6 rig_dyn move linear 0.0 0.5 0.0
 
 
 variable           Dr equal 0.5*${h3}*${cs}
@@ -151,8 +178,8 @@ timestep           ${dt_max}
 timestep           0.0233333333333333
 #fix                dtr all dt/reset 1 NULL ${dt_max} ${dx_max}  units box
 variable           Nsteps equal round(${t_tot}/${dt_max})
-variable           Nsteps equal round(750/${dt_max})
-variable           Nsteps equal round(750/0.0233333333333333)
+variable           Nsteps equal round(300/${dt_max})
+variable           Nsteps equal round(300/0.0233333333333333)
 
 compute            den all property/atom rho
 compute            phase all property/atom phase
@@ -162,18 +189,15 @@ thermo             200
 thermo_style       custom step time etotal temp press
 
 thermo_modify      norm no
-dump               1 all custom 100 dam_break_CRK1.atoms id type x y vx vy fx fy c_den c_phase c_eta #f_rheo_chi_chi
-dump               2 all netcdf 100 dam_break_CRK1.nc id type x y z vx vy vz fx fy c_den c_phase c_eta #f_rheo_chi_chi
+dump               1 all custom 500 static_test.atoms id type x y vx vy fx fy c_den c_phase c_eta #f_rheo_chi_chi
+dump               2 all netcdf 500 static_test.nc id type x y z vx vy vz fx fy c_den c_phase c_eta #f_rheo_chi_chi
 variable           skin equal 0.2*${h3}
 variable           skin equal 0.2*0.7
 neighbor           ${skin} bin
 neighbor           0.14 bin
 neigh_modify       one 5000
 run                ${Nsteps}
-run                32143
-Unused restart file peratom fix info:
-  fix style: property/atom, fix ID: PROPERTY_ATOM_COMP_RHEO_SOLIDS
-WARNING: One or more atoms are time integrated more than once (src/modify.cpp:285)
+run                12857
 Neighbor list info ...
   update every 1 steps, delay 10 steps, check yes
   max neighbors/atom: 5000, page size: 100000
@@ -211,22 +235,103 @@ Neighbor list info ...
       pair build: copy
       stencil: none
       bin: none
-Per MPI rank memory allocation (min/avg/max) = 32.84 | 33.58 | 35.64 Mbytes
+Per MPI rank memory allocation (min/avg/max) = 35.69 | 37.10 | 38.51 Mbytes
 Step Time TotEng Temp Press 
-   12857            0 3.1991037e-05 4.9452832e-09 0.00054939514 
-   13000    3.3366667  0.032049564 4.9543305e-06 0.00031698228 
-   13200    8.0033333  0.038418416 5.9388493e-06 -0.00062438181 
-   13400        12.67  0.043366944 6.7038096e-06 -0.0018347403 
-   13600    17.336667  0.047253777 7.3046494e-06 -0.0026168716 
-   13800    22.003333  0.049330866 7.6257328e-06 -0.0022444915 
-   14000        26.67  0.052830569 8.1667288e-06 -0.0023221823 
-   14200    31.336667  0.069181025 1.0694238e-05 -0.0029239847 
-   14400    36.003333  0.089412277 1.3821654e-05 -0.0039859123 
-   14600        40.67  0.067723193 1.0468881e-05 -0.0045623046 
-   14800    45.336667  0.075475599 1.1667274e-05 -0.0037062727 
-   15000    50.003333    0.0716817 1.1080801e-05 -0.0027463156 
-   15200        54.67   0.15265133 2.3597362e-05 -0.00036056693 
-   15400    59.336667    0.1414437 2.1864847e-05 -0.0025651577 
-   15600    64.003333    8.0816756 0.0012492929 0.0076943358 
-ERROR: Lost atoms: original 6470 current 6469 (src/thermo.cpp:427)
-Last command: run                ${Nsteps}
+       0            0            0            0            0 
+     200    4.6666667 8.0307926e-05 1.2414272e-08 3.5147975e-05 
+     400    9.3333333 0.00025662676 3.9670237e-08 0.00012679157 
+     600           14 0.00044743862 6.9166583e-08 0.00026842892 
+     800    18.666667 0.00057816618 8.9374892e-08 0.00045811947 
+    1000    23.333333 0.00058966028 9.115169e-08  0.000663443 
+    1200           28 0.00047943393 7.4112527e-08 0.00084783237 
+    1400    32.666667 0.00029793298 4.6055493e-08 0.00099614358 
+    1600    37.333333 0.0001225452 1.8943453e-08 0.0010940381 
+    1800           42 2.5544191e-05 3.9487078e-09 0.0011297413 
+    2000    46.666667 3.4128097e-05 5.2756372e-09 0.0010985513 
+    2200    51.333333 0.00012047474 1.8623394e-08 0.0010018649 
+    2400           56 0.00022232786 3.4368197e-08 0.00085007876 
+    2600    60.666667 0.00027621506 4.2698263e-08 0.00066923334 
+    2800    65.333333 0.00025235779 3.9010325e-08 0.00049136032 
+    3000           70 0.00016682385 2.5788197e-08 0.00034049367 
+    3200    74.666667 6.7928097e-05 1.0500556e-08 0.00023282892 
+    3400    79.333333 8.8783754e-06 1.3724494e-09 0.00017883244 
+    3600           84 1.8334385e-05 2.8341915e-09 0.00018351575 
+    3800    88.666667 8.7077669e-05 1.3460762e-08 0.00024622147 
+    4000    93.333333 0.00017609962 2.7222078e-08 0.00035782335 
+    4200           98 0.00023818298 3.6819134e-08 0.00049898093 
+    4400    102.66667 0.00024302142 3.7567078e-08 0.00064589665 
+    4600    107.33333 0.00019093162 2.9514859e-08 0.00077834914 
+    4800          112 0.00010958269 1.6939664e-08 0.00088105973 
+    5000    116.66667 3.8057505e-05 5.8830584e-09 0.00094256952 
+    5200    121.33333 6.2665952e-06 9.6871158e-10 0.00095590176 
+    5400          126 2.0762291e-05 3.2095054e-09 0.00092015059 
+    5600    130.66667 6.3945364e-05 9.8848917e-09 0.00084153979 
+    5800    135.33333 0.00010568939 1.6337826e-08 0.00073315564 
+    6000          140 0.00012055658 1.8636045e-08 0.00061225617 
+    6200    144.66667 0.00010081312 1.5584035e-08 0.0004962825 
+    6400    149.33333 5.8838329e-05 9.0954288e-09 0.00040032335 
+    6600          154 1.8727707e-05 2.8949925e-09 0.00033605953 
+    6800    158.66667 2.3304085e-06 3.6024247e-10 0.00031091013 
+    7000    163.33333 1.7738875e-05 2.7421356e-09 0.00032728305 
+    7200          168 5.5837155e-05 8.6314972e-09 0.00038168452 
+    7400    172.66667 9.6039961e-05 1.4846183e-08 0.00046463566 
+    7600    177.33333 0.00011771233 1.8196371e-08 0.00056267288 
+    7800          182 0.00011070511 1.7113173e-08 0.00066143372 
+    8000    186.66667 7.9631545e-05 1.2309715e-08 0.00074780451 
+    8200    191.33333 4.0363188e-05 6.2394788e-09 0.00081086356 
+    8400          196 1.1085339e-05 1.7136093e-09 0.00084273265 
+    8600    200.66667 2.8932646e-06 4.4725067e-10 0.00083986147 
+    8800    205.33333 1.4882058e-05 2.3005191e-09 0.00080396787 
+    9000          210 3.5965307e-05 5.5596394e-09 0.00074164956 
+    9200    214.66667 5.1846872e-05 8.0146656e-09 0.00066295928 
+    9400    219.33333 5.2968477e-05 8.1880471e-09 0.00057955666 
+    9600          224 3.9173608e-05 6.0555894e-09 0.00050297753 
+    9800    228.66667 1.8935978e-05 2.9271879e-09 0.00044329754 
+   10000    233.33333 4.0238011e-06 6.2201284e-10 0.00040802676 
+   10200          238 2.8636514e-06 4.4267296e-10 0.00040121764 
+   10400    242.66667 1.616995e-05 2.4996059e-09 0.00042284364 
+   10600    247.33333 3.6908371e-05 5.7054213e-09 0.0004686774 
+   10800          252 5.4371582e-05 8.4049438e-09 0.00053111515 
+   11000    256.66667 5.9923615e-05 9.2631961e-09 0.00060069326 
+   11200    261.33333 5.1262273e-05 7.9242963e-09 0.00066760106 
+   11400          266 3.3127529e-05 5.120966e-09 0.00072282786 
+   11600    270.66667 1.4355746e-05  2.21916e-09 0.00075911996 
+   11800    275.33333 3.0641066e-06 4.7366001e-10 0.00077196773 
+   12000          280 2.6081895e-06 4.0318279e-10 0.00076044743 
+   12200    284.66667 1.0411521e-05 1.6094483e-09 0.00072731584 
+   12400    289.33333 2.0027039e-05 3.0958477e-09 0.00067823809 
+   12600          294 2.5015049e-05 3.8669112e-09 0.00062074108 
+   12800    298.66667 2.2422234e-05 3.4661052e-09 0.00056309454 
+   12857    299.99667 2.0440999e-05 3.1598391e-09 0.00054776858 
+Loop time of 333.613 on 16 procs for 12857 steps with 6470 atoms
+
+Performance: 77694.049 tau/day, 38.539 timesteps/s
+99.9% CPU use with 2 MPI tasks x 8 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 13.804     | 23.451     | 33.097     | 199.2 |  7.03
+Neigh   | 0.0057278  | 0.010197   | 0.014666   |   4.4 |  0.00
+Comm    | 0.18365    | 0.23266    | 0.28167    |  10.2 |  0.07
+Output  | 0.23079    | 0.28099    | 0.33118    |   9.5 |  0.08
+Modify  | 299.83     | 301.04     | 302.25     |   7.0 | 90.24
+Other   |            | 8.598      |            |       |  2.58
+
+Nlocal:        3235.00 ave        4501 max        1969 min
+Histogram: 1 0 0 0 0 0 0 0 0 1
+Nghost:        233.500 ave         242 max         225 min
+Histogram: 1 0 0 0 0 0 0 0 0 1
+Neighs:        82263.5 ave      117546 max       46981 min
+Histogram: 1 0 0 0 0 0 0 0 0 1
+FullNghs:     161838.0 ave      232403 max       91273 min
+Histogram: 1 0 0 0 0 0 0 0 0 1
+
+Total # of neighbors = 323676
+Ave neighs/atom = 50.027202
+Neighbor list builds = 7
+Dangerous builds = 0
+write_restart      restart_static
+System init for write_restart ...
+
+Total wall time: 0:05:33
