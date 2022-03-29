@@ -7,7 +7,7 @@ newton off
 
 ## Particle Lattice/Resolution Parameters
 variable           L equal 10
-variable           t_tot equal 300
+variable           t_tot equal 500
 variable           sf equal .2 #/${L} #scaling of unit cell
 variable           nb equal 1    #number of basis atoms depends on lattice
 variable           n equal ${nb}/(${sf}^2)
