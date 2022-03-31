@@ -1,0 +1,7 @@
+#!/bin/bash
+
+mpirun -np 4 ~/dev/rlammps_wall_debug/build/lmp -in lammps_in__0_10_0p1_1e-5
+mpirun -np 4 ~/dev/rlammps_wall_debug/build/lmp -in lammps_in__1_10_0p1_1e-5
+mpirun -np 4 ~/dev/rlammps_wall_debug/build/lmp -in lammps_in__2_10_0p1_1e-5
+mpirun -np 4 ~/dev/rlammps_wall_debug/build/lmp -in lammps_in__5_10_0p1_1e-5
+

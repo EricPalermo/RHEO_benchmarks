@@ -1,0 +1,240 @@
+LAMMPS (29 Oct 2020)
+  using 8 OpenMP thread(s) per MPI task
+dimension          2
+units              lj
+atom_style         rheo
+boundary           f s p
+comm_modify        vel yes
+newton off
+
+## Particle Lattice/Resolution Parameters
+variable           L equal 10
+variable           t_tot equal 300
+variable           sf equal 0.1 #/${L} #scaling of unit cell
+variable           nb equal 1    #number of basis atoms depends on lattice
+variable           n equal ${nb}/(${sf}^2)
+variable           n equal 1/(${sf}^2)
+variable           n equal 1/(0.1^2)
+variable           del equal ${sf}#*sqrt(2)
+variable           del equal 0.1
+variable           hd equal 3.5
+variable           h3 equal ${hd}*${del}
+variable           h3 equal 3.5*${del}
+variable           h3 equal 3.5*0.1
+variable           dz equal 0.1*${sf}
+variable           dz equal 0.1*0.1
+
+# create simulation box
+
+# read_restart       restart_adj_param.857143
+###########################
+### COMMENT FOR RESTART ###
+
+region             box block 0 20 0 30 -${dz} ${dz} units box
+region             box block 0 20 0 30 -0.01 ${dz} units box
+region             box block 0 20 0 30 -0.01 0.01 units box
+create_box         3 box
+Created orthogonal box = (0.0000000 0.0000000 -0.01) to (20.000000 30.000000 0.01)
+  2 by 3 by 1 MPI processor grid
+lattice            sq ${n}
+lattice            sq 100
+Lattice spacing in x,y,z = 0.1 0.1 0.1
+
+region             left_wall block 0 1 1.01 30 -${dz} ${dz} units box
+region             left_wall block 0 1 1.01 30 -0.01 ${dz} units box
+region             left_wall block 0 1 1.01 30 -0.01 0.01 units box
+region             right_wall block 19 20 1.01 30 -${dz} ${dz} units box
+region             right_wall block 19 20 1.01 30 -0.01 ${dz} units box
+region             right_wall block 19 20 1.01 30 -0.01 0.01 units box
+region             bot_wall block 0 20 0 1 -${dz} ${dz} units box
+region             bot_wall block 0 20 0 1 -0.01 ${dz} units box
+region             bot_wall block 0 20 0 1 -0.01 0.01 units box
+region             interior block 1.01 8.99 1.01 20 -${dz} ${dz} units box
+region             interior block 1.01 8.99 1.01 20 -0.01 ${dz} units box
+region             interior block 1.01 8.99 1.01 20 -0.01 0.01 units box
+region             mid_wall block 9 10 1.01 30 -${dz} ${dz} units box
+region             mid_wall block 9 10 1.01 30 -0.01 ${dz} units box
+region             mid_wall block 9 10 1.01 30 -0.01 0.01 units box
+create_atoms       1 region interior
+Created 15010 atoms
+  create_atoms CPU = 0.003 seconds
+create_atoms       2 region left_wall
+Created 3190 atoms
+  create_atoms CPU = 0.002 seconds
+create_atoms       2 region right_wall
+Created 2900 atoms
+  create_atoms CPU = 0.001 seconds
+create_atoms       2 region bot_wall
+Created 2200 atoms
+  create_atoms CPU = 0.000 seconds
+create_atoms       3 region mid_wall
+Created 3190 atoms
+  create_atoms CPU = 0.000 seconds
+
+group              fluid type 1
+15010 atoms in group fluid
+group              stat_wall type 2
+8290 atoms in group stat_wall
+group              dyn_wall type 3
+3190 atoms in group dyn_wall
+group              wall union stat_wall dyn_wall
+11480 atoms in group wall
+
+
+#Now randomly displace in x and y up %20 of their spacing (sf)
+variable           seed equal 135414
+variable           dr equal 0.1*${del}
+variable           dr equal 0.1*0.1
+#displace_atoms     fluid random ${dr} ${dr} 0 ${seed} units box
+
+# Potential parameters eta = 1, cs = 0 so force gives laplacian
+variable           rho0 equal 1.0
+variable           mp equal ${rho0}/${n}
+variable           mp equal 1/${n}
+variable           mp equal 1/100
+variable           cs equal 1
+variable           zeta equal 1
+variable           D equal 1.0
+variable	       kappa equal ${D}*${rho0}/${mp}
+variable	       kappa equal 1*${rho0}/${mp}
+variable	       kappa equal 1*1/${mp}
+variable	       kappa equal 1*1/0.01
+variable           Dr equal 0.1*${h3}*${cs}
+variable           Dr equal 0.1*0.35*${cs}
+variable           Dr equal 0.1*0.35*1
+variable           fext equal 1e-5/${n}
+variable           fext equal 1e-5/100
+#Viscosity parameters
+variable           eta equal 0.1
+#(for a Herschel-Bulkley fluid - special case: power law)
+variable           gd0 equal 1e-2
+variable           npow equal 0.5
+variable           K equal ${eta}*${gd0}^(1-${npow})
+variable           K equal 0.1*${gd0}^(1-${npow})
+variable           K equal 0.1*0.01^(1-${npow})
+variable           K equal 0.1*0.01^(1-0.5)
+
+
+# Set particle properties
+mass               1 ${mp}
+mass               1 0.01
+mass               2 ${mp}
+mass               2 0.01
+mass               3 ${mp}
+mass               3 0.01
+
+set                group all rho ${rho0}
+set                group all rho 1
+Setting atom values ...
+  26490 settings made for rho
+set                group all phase 0
+Setting atom values ...
+  26490 settings made for phase
+set                group wall phase 4
+Setting atom values ...
+  11480 settings made for phase
+
+set                group all temp 1.0
+Setting atom values ...
+  26490 settings made for temp
+
+
+#Integration and Kernel
+fix                1 all rheo ${h3} CRK2 25 shift # rhosum 1  shift
+fix                1 all rheo 0.35 CRK2 25 shift 
+fix                2 all rheo/viscosity constant ${eta}
+fix                2 all rheo/viscosity constant 0.1
+#fix                2 all rheo/viscosity power ${eta} ${gd0} ${K} ${npow}
+fix                3 all rheo/surface ${h3} 1.5 25
+fix                3 all rheo/surface 0.35 1.5 25
+
+fix                4 wall setforce 0.0 0.0 0.0
+fix                5 fluid addforce 0.0 ${fext} 0.0
+fix                5 fluid addforce 0.0 1e-07 0.0
+#fix                6 rig_dyn move linear 0.0 0.5 0.0
+
+
+pair_style         rheo ${h3} artificial/visc ${zeta} rho/damp ${Dr}  #pressure taitwater rho/damp ${Dr}
+pair_style         rheo 0.35 artificial/visc ${zeta} rho/damp ${Dr}  
+pair_style         rheo 0.35 artificial/visc 1 rho/damp ${Dr}  
+pair_style         rheo 0.35 artificial/visc 1 rho/damp 0.035  
+pair_coeff         * * ${rho0} ${cs}
+pair_coeff         * * 1 ${cs}
+pair_coeff         * * 1 1
+
+#Timestep
+variable           dt_max equal  0.1*${h3}/${cs}/3 #CFL criterion
+variable           dt_max equal  0.1*0.35/${cs}/3 
+variable           dt_max equal  0.1*0.35/1/3 
+#variable           dt_max equal 0.125*${h3}*${h3}/${eta}/9 #Viscous criterion
+#variable            dt_max equal 0.25*sqrt(${h3}/${fext}/${sf})
+#variable           dt_max equal 0.1*${sf}/.01
+#variable           dx_max equal ${h3}/100
+timestep           ${dt_max}
+timestep           0.0116666666666667
+#fix                dtr all dt/reset 1 NULL ${dt_max} ${dx_max}  units box
+variable           Nsteps equal round(${t_tot}/${dt_max})
+variable           Nsteps equal round(300/${dt_max})
+variable           Nsteps equal round(300/0.0116666666666667)
+
+compute            den all property/atom rho
+compute            phase all property/atom phase
+compute            eta all property/atom viscosity
+
+thermo             200
+thermo_style       custom step time etotal temp press
+
+thermo_modify      norm no
+dump               1 all custom 500 static/dump/2_10_0p1_1e-5.atoms id type x y vx vy fx fy c_den c_phase c_eta #f_rheo_chi_chi
+dump               2 all netcdf 500 static/ncdf/2_10_0p1_1e-5.nc id type x y z vx vy vz fx fy c_den c_phase c_eta #f_rheo_chi_chi
+variable           skin equal 0.2*${h3}
+variable           skin equal 0.2*0.35
+neighbor           ${skin} bin
+neighbor           0.07 bin
+neigh_modify       one 5000
+run                ${Nsteps}
+run                25714
+Neighbor list info ...
+  update every 1 steps, delay 10 steps, check yes
+  max neighbors/atom: 5000, page size: 100000
+  master list distance cutoff = 0.42
+  ghost atom cutoff = 0.42
+  binsize = 0.21, bins = 96 143 1
+  6 neighbor lists, perpetual/occasional/extra = 6 0 0
+  (1) pair rheo, perpetual, half/full from (2)
+      attributes: half, newton off
+      pair build: halffull/newtoff
+      stencil: none
+      bin: none
+  (2) compute rheo/kernel, perpetual
+      attributes: full, newton off
+      pair build: full/bin/atomonly
+      stencil: full/bin/2d
+      bin: standard
+  (3) compute rheo/grad, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+  (4) compute rheo/solids, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+  (5) compute rheo/vshift, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+  (6) fix rheo/surface, perpetual, copy from (1)
+      attributes: half, newton off
+      pair build: copy
+      stencil: none
+      bin: none
+Per MPI rank memory allocation (min/avg/max) = 37.70 | 40.00 | 44.10 Mbytes
+Step Time TotEng Temp Press 
+       0            0            0            0            0 
+     200    2.3333333 4.5348613e-08 1.7119791e-12 -3.2262662e-07 
+     400    4.6666667 6.3998974e+08    24160.585    1066438.5 
+ERROR: Domain too large for neighbor bins (src/nbin_standard.cpp:104)
+Last command: run                ${Nsteps}
