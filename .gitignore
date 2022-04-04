@@ -3,3 +3,4 @@ data_files/
 *.nc
 data.*
 restart.*
+atomDump.*

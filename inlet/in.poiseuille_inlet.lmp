@@ -29,9 +29,14 @@ variable           dz equal 0.1*${sf}
 
 read_data          data_initial
 
-group              fluid type 1
-group              rig type 2
-
+###Create a cylinder
+region             obstacle cylinder z 10 0 1 -${dz} ${dz} units box
+group              obstacle region obstacle
+group              walls type 2
+group              rig union walls obstacle
+group              fluid subtract all rig
+set                group rig type 2
+###
 variable           strip_width equal $(lx/10)
 change_box         all x final $(xlo) $(xhi+v_strip_width)
 # Expand box to the right by a distance equal to the length inserted
@@ -81,7 +86,7 @@ variable           fext equal 1e-5/${n}
 fix                1 all rheo ${h3} CRK1 0 shift
 fix                2 all rheo/viscosity constant ${eta} 
 fix                3 rig setforce 0.0 0.0 0.0
-fix                4 fluid addforce ${fext} 0.0 0.0
+#fix                4 fluid addforce ${fext} 0.0 0.0
 fix                5 all rheo/inlet ${h3} data_inlet ${strip_width} $(v_strip_width/100)
 # Args are file, width of insertion, velocity of inserted particles. 
 #
