@@ -4,3 +4,5 @@ data_files/
 data.*
 restart.*
 atomDump.*
+log.lammps
+
